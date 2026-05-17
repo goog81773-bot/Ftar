@@ -3,33 +3,53 @@ const axios = require('axios');
 module.exports = {
     name: 'قرآن',
     aliases: ['ايه', 'آية', 'راحه', 'quran'],
+    category: 'إسلاميات',
+    description: 'يرسل آية قرآنية عشوائية بصوت العفاسي مع التفسير الميسر.',
     execute: async ({ reply, sock, from, msg }) => {
-        await sock.sendMessage(from, { react: { text: '🕌', key: msg.key } });
+        // تفاعل البوت مع الرسالة برمز الكعبة أو المسجد
+        await sock.sendMessage(from, { react: { text: '🕋', key: msg.key } });
         
         try {
-            // استدعاء آية عشوائية من API موثوق ومجاني
-            const response = await axios.get('[https://api.alquran.cloud/v1/ayah/](https://api.alquran.cloud/v1/ayah/)' + Math.floor(Math.random() * 6236) + '/ar.alafasy');
-            const data = response.data?.data;
+            await reply('⏳ ╟ *جَارِي جَلْبُ رَاحَةِ القَلْب...*');
+
+            // عدد آيات القرآن 6236، أضفنا +1 لكي لا يظهر الرقم 0 الذي يسبب خطأ
+            const randomAyahNumber = Math.floor(Math.random() * 6236) + 1;
             
-            if (!data) throw new Error("API Error");
+            // جلب الصوت (العفاسي) والتفسير (الميسر) في نفس اللحظة لزيادة السرعة
+            const [audioRes, tafsirRes] = await Promise.all([
+                axios.get(`https://api.alquran.cloud/v1/ayah/${randomAyahNumber}/ar.alafasy`),
+                axios.get(`https://api.alquran.cloud/v1/ayah/${randomAyahNumber}/ar.muyassar`)
+            ]);
 
-            const quranText = `🕌 *[ صَدَقَ اللهُ الْعَظِيمُ ]* 🕌\n\n` +
-                              `📖 *الآية:* \n「 ${data.text} 」\n\n` +
-                              `📌 *السورة:* ${data.surah.name} (آية ${data.numberInSurah})\n` +
-                              `🎙️ *بصوت القارئ:* مشاري بن راشد العفاسي\n\n` +
-                              `*— أرح سمعك وقلبك 🤍*`;
+            const audioData = audioRes.data.data;
+            const tafsirData = tafsirRes.data.data;
 
-            // إرسال النص مع المقطع الصوتي للآية مباشرة لتجربة غامرة
-            await sock.sendMessage(from, { text: quranText }, { quoted: msg });
-            if (data.audio) {
+            if (!audioData || !tafsirData) throw new Error("API Error");
+
+            // صياغة الرسالة بتنسيق ملكي ومريح للعين
+            const quranText = 
+                `❖ ════ 🕋 ﴿ نُورٌ عَلَى نُور ﴾ 🕋 ════ ❖\n\n` +
+                `📖 ╟ *الآيَة:*\n﴿ ${audioData.text} ﴾\n\n` +
+                `💡 ╟ *التَّفْسِير (المُيَسَّر):*\n${tafsirData.text}\n\n` +
+                `📌 ╟ *السُّورَة:* ${audioData.surah.name} - آيَة [${audioData.numberInSurah}]\n` +
+                `🎙️ ╟ *القَارِئ:* مِشَارِي بن رَاشِد العَفَاسِي\n\n` +
+                `❖ ════════════════════════ ❖`;
+
+            // إرسال النص والتفسير
+            await reply(quranText);
+
+            // إرسال المقطع الصوتي كـ (فويس نوت PTT)
+            if (audioData.audio) {
                 await sock.sendMessage(from, { 
-                    audio: { url: data.audio }, 
+                    audio: { url: audioData.audio }, 
                     mimetype: 'audio/mpeg', 
                     ptt: true 
                 }, { quoted: msg });
             }
-        } catch (e) {
-            reply('❌ *حدث خطأ أثناء الاتصال بمصحف طرزان الرقمي. يرجى المحاولة لاحقاً.*');
+
+        } catch (error) {
+            console.error('[Quran Error]:', error.message);
+            reply('❌ ╟ *عُذْراً، حَدَثَ خَطَأٌ فِي الِاتِّصَالِ بِقَاعِدَةِ البَيَانَاتِ القُرْآنِيَّة، حَاوِلْ مُجَدَّداً.*');
         }
     }
 };
