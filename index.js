@@ -361,7 +361,7 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
                 const query = body.trim();
                 
                 // 🔑 المفتاح الخاص بك لنظام الذكاء الاصطناعي
-                const API_KEY =  'AI_1d21219cc3914971' ; 
+                const API_KEY =  'AI_7bcc1564db6e491c' ; 
                 // 🌐 رابط سيرفر البايثون الخاص بك
                 const API_URL =  'http://Fi5.bot-hosting.net:22214/api/chat' ;
 
