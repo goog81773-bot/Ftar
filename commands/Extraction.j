@@ -1,46 +1,84 @@
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const Tesseract = require('tesseract.js');
+const axios = require('axios');
 
 module.exports = {
-    name: 'ocr',
-    aliases: ['نص', 'استخراج'],
+    name: 'اقتباس',
+    aliases: ['qc', 'مقولة'],
     execute: async ({ sock, msg, reply, from }) => {
         
-        const isMedia = msg.message?.imageMessage;
-        const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-        const isQuotedMedia = quotedMsg?.imageMessage;
+        // التحقق من أن الأمر هو رد على رسالة شخص آخر
+        const quotedMsgContext = msg.message?.extendedTextMessage?.contextInfo;
+        const quotedMessage = quotedMsgContext?.quotedMessage;
+        
+        if (!quotedMessage) {
+            return reply('❌ *يجب أن ترد على رسالة شخص ما بهذا الأمر لصنع اقتباس لها.*');
+        }
 
-        if (!isMedia && !isQuotedMedia) {
-            return reply('❌ *يرجى إرسال صورة أو الرد على صورة لاستخراج النص منها.*');
+        // استخراج نص الرسالة المردود عليها
+        const textToQuote = quotedMessage.conversation || quotedMessage.extendedTextMessage?.text;
+        
+        if (!textToQuote) {
+            return reply('❌ *لا يوجد نص في الرسالة المردود عليها!*');
         }
 
         try {
-            await sock.sendMessage(from, { react: { text: '🔍', key: msg.key } });
+            await sock.sendMessage(from, { react: { text: '📸', key: msg.key } });
 
-            const messageToDownload = isMedia ? msg : { message: quotedMsg };
-            const buffer = await downloadMediaMessage(messageToDownload, 'buffer', {}, { logger: console });
-
-            reply('⏳ *جاري تحليل الصورة وقراءة النص، يرجى الانتظار...*');
-
-            // استخدام مكتبة Tesseract للتعرف على الحروف (يدعم العربية والإنجليزية)
-            const { data: { text } } = await Tesseract.recognize(
-                buffer,
-                'ara+eng', // اللغات: عربي + إنجليزي
-                { logger: m => console.log(m) }
-            );
-
-            if (!text.trim()) {
-                return reply('❌ *لم أتمكن من العثور على أي نص واضح في هذه الصورة.*');
+            // جلب رقم الشخص صاحب الرسالة الأصلية
+            const senderJid = quotedMsgContext.participant;
+            
+            // محاولة جلب صورته الشخصية، وإذا لم يضع صورة نضع صورة افتراضية
+            let ppUrl;
+            try {
+                ppUrl = await sock.profilePictureUrl(senderJid, 'image');
+            } catch (e) {
+                ppUrl = 'https://i.ibb.co/3Fh9Q6M/blank-profile-picture.png'; // صورة افتراضية
             }
 
-            // إرسال النص المستخرج
-            await reply(`📝 *النص المستخرج:*\n\n${text}`);
+            // محاولة جلب اسمه المسجل في الواتساب
+            const contact = await sock.contactDB?.get(senderJid); // إذا كنت تستخدم قاعدة بيانات جهات اتصال
+            const pushName = contact?.notify || contact?.name || senderJid.split('@')[0];
+
+            // إعداد البيانات لإرسالها لـ API صانع الاقتباسات
+            const obj = {
+                type: "quote",
+                format: "png",
+                backgroundColor: "#1b1429", // لون خلفية فخم
+                width: 512,
+                height: 768,
+                scale: 2,
+                messages: [{
+                    entities: [],
+                    avatar: true,
+                    from: {
+                        id: 1,
+                        name: pushName,
+                        photo: { url: ppUrl }
+                    },
+                    text: textToQuote,
+                    replyMessage: {}
+                }]
+            };
+
+            // استخدام API مشهور لعمل الـ Quotes
+            const response = await axios.post('https://bot.lyo.su/quote/generate', obj, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            // جلب الصورة الناتجة (Base64) وتحويلها لـ Buffer
+            const buffer = Buffer.from(response.data.result.image, 'base64');
+
+            // إرسال صورة الاقتباس
+            await sock.sendMessage(from, { 
+                image: buffer,
+                caption: '🌟 *تم تصميم الاقتباس بنجاح!*'
+            }, { quoted: msg });
+
             await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
-            console.error('❌ خطأ في أمر OCR:', error);
+            console.error('❌ خطأ في أمر الاقتباس:', error);
             await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
-            reply('❌ *حدث خطأ أثناء محاولة قراءة الصورة.*');
+            reply('❌ *حدث خطأ أثناء صنع الاقتباس.*');
         }
     }
 };
