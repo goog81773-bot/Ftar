@@ -3,7 +3,7 @@ const { Sticker, createSticker, StickerTypes } = require('wa-sticker-formatter')
 
 module.exports = {
     name: 'sticker',
-    aliases: ['s', 'ستيكر', 'ملصق'],
+    aliases: ['s','ستيكر'],
     execute: async ({ sock, msg, reply, from }) => {
         
         // التحقق مما إذا كانت الرسالة الحالية تحتوي على ميديا، أو إذا تم الرد على رسالة بها ميديا
