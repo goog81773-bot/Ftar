@@ -9,7 +9,7 @@ module.exports = {
         
         const input = args.join(' ');
         if (!input || !input.includes('|')) {
-            return reply('❌ *الاستخدام الخاطئ!*\n\n*الطريقة الصحيحة:*\nرد على صورة أو فيديو (GIF) واكتب:\n.هدية [النص] | [كلمة السر]\n\n*مثال:*\n.هدية أحبك | 2026');
+            return reply('❌ *الاستخدام الخاطئ!*\n\n*مثال:*\n.هدية أحبك | 2026');
         }
 
         const [textPart, passwordPart] = input.split('|');
@@ -44,11 +44,11 @@ module.exports = {
 
             await sock.sendMessage(from, { react: { text: '🌐', key: msg.key } });
 
-            const ftpClient = new Client();
-            
             const uniqueId = Math.floor(Math.random() * 900000) + 100000;
             const finalFileName = `gift_${uniqueId}.html`;
 
+            const ftpClient = new Client();
+            
             await ftpClient.access({
                 host: "ftpupload.net",
                 user: "ezyro_41968850",
@@ -58,20 +58,24 @@ module.exports = {
 
             const sourceStream = Readable.from(htmlBuffer);
 
-            await ftpClient.cd("htdocs");
+            // 🎯 الحل الجذري
+            try {
+                await ftpClient.cd("/tarzan.liveblog365.com/htdocs");
+            } catch (err) {
+                await ftpClient.cd("/htdocs");
+            }
             
             await ftpClient.uploadFrom(sourceStream, finalFileName);
             ftpClient.close();
 
-            // 👑 التصحيح الأهم: استخدام النطاق الرئيسي
-            const finalLink = `http://87ebd98f.ezyro.com/${finalFileName}`;
-            const captionMsg = `🎀 *تم تجهيز هديتك بنجاح!*\n🔗 ${finalLink}\n🔐 *الباسورد:* ${password}\n\n👑 *بواسطة طرزان بوت*`;
+            const finalLink = `http://tarzan.liveblog365.com/${finalFileName}`;
+            const captionMsg = `🎀 *تم تجهيز هديتك بنجاح!*\n🔗 ${finalLink}\n🔐 *الباسورد:* ${password}`;
             
             await sock.sendMessage(from, { text: captionMsg }, { quoted: msg });
             await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
-            console.error('❌ خطأ في أمر الهدية:', error);
+            console.error('❌ خطأ:', error);
             await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
             reply('❌ *فشل الرفع.*');
         }
