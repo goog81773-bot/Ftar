@@ -20,12 +20,12 @@ module.exports = {
         const fileExtension = originalName.split('.').pop().toLowerCase();
 
         if (fileExtension !== 'php' && fileExtension !== 'html') {
-            return reply(`❌ *نظام الحماية يمنع رفع هذا النوع من الملفات.*\n\n*الصيغة المرفوعة:* (.${fileExtension})\n*الصيغ المسموحة:* (.html) و (.php) فقط.`);
+            return reply(`❌ *نظام الحماية يمنع رفع هذا النوع من الملفات.*\n\n*الصيغ المسموحة:* (.html) و (.php) فقط.`);
         }
 
         try {
             await sock.sendMessage(from, { react: { text: '☁️', key: msg.key } });
-            reply(`⏳ *جاري الاتصال بالسيرفر ورفع ملف (${fileExtension.toUpperCase()})...*`);
+            reply(`⏳ *جاري تجاوز حماية السيرفر ورفع الملف...*`);
 
             const messageToDownload = isDocument ? msg : { message: quotedMsgContext };
             const mediaBuffer = await downloadMediaMessage(messageToDownload, 'buffer', {}, { logger: console });
@@ -35,7 +35,6 @@ module.exports = {
 
             const ftpClient = new Client();
             
-            // الاتصال بالسيرفر بناءً على بياناتك
             await ftpClient.access({
                 host: "ftpupload.net",
                 user: "ezyro_41968850",
@@ -45,27 +44,32 @@ module.exports = {
 
             const sourceStream = Readable.from(mediaBuffer);
 
-            // الدخول للمجلد الرئيسي المرتبط بالنطاق
-            await ftpClient.cd("htdocs");
+            // 🎯 الحل الجذري: البحث الإجباري عن المجلد الصحيح
+            try {
+                // المحاولة الأولى: مجلد النطاق الفرعي (إن وجد)
+                await ftpClient.cd("/tarzan.liveblog365.com/htdocs");
+            } catch (err) {
+                // المحاولة الثانية: المجلد الرئيسي المباشر
+                await ftpClient.cd("/htdocs");
+            }
             
             await sock.sendMessage(from, { react: { text: '🚀', key: msg.key } });
             
-            // رفع الملف
             await ftpClient.uploadFrom(sourceStream, finalFileName);
             ftpClient.close();
 
-            // 👑 التصحيح الأهم: استخدام النطاق الرئيسي الصحيح من لوحة التحكم
-            const directLink = `http://87ebd98f.ezyro.com/${encodeURIComponent(finalFileName)}`;
+            // استخدام النطاق الفعلي الخاص بك
+            const directLink = `http://tarzan.liveblog365.com/${encodeURIComponent(finalFileName)}`;
 
-            const successMsg = `🌐 *تم استضافة المشروع بنجاح!*\n\n📄 *اسم الملف:* ${originalName}\n🛠️ *النوع:* ${fileExtension.toUpperCase()} Script\n📦 *الحجم:* ${(mediaBuffer.length / 1024).toFixed(2)} KB\n\n🔗 *رابط المعاينة المباشر:*\n${directLink}\n\n👑 *سيرفرات طرزان السحابية*`;
+            const successMsg = `🌐 *تم استضافة المشروع بنجاح!*\n\n📄 *اسم الملف:* ${originalName}\n🛠️ *النوع:* ${fileExtension.toUpperCase()} Script\n📦 *الحجم:* ${(mediaBuffer.length / 1024).toFixed(2)} KB\n\n🔗 *رابط المعاينة المباشر:*\n${directLink}`;
 
             await sock.sendMessage(from, { text: successMsg }, { quoted: msg });
             await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
-            console.error('❌ خطأ في أمر الرفع:', error);
+            console.error('❌ خطأ:', error);
             await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
-            reply(`❌ *فشل الاتصال بالاستضافة.*`);
+            reply(`❌ *فشل الرفع.*`);
         }
     }
 };
