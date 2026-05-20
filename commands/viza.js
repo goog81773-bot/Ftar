@@ -1,6 +1,6 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { Client } = require("basic-ftp");
-const { Readable } = require('stream');
+const axios = require('axios');
+const FormData = require('form-data');
 
 module.exports = {
     name: 'رفع',
@@ -12,64 +12,59 @@ module.exports = {
         const isQuotedDocument = quotedMsgContext?.documentMessage;
 
         if (!isDocument && !isQuotedDocument) {
-            return reply('❌ *يرجى إرسال ملف برمجي أو الرد على ملف، ثم كتابة .رفع*');
+            return reply('❌ *يرجى إرسال ملف برمجي (HTML/PHP) أو الرد عليه، ثم كتابة .رفع*');
         }
 
         const docMessage = isDocument ? msg.message.documentMessage : quotedMsgContext.documentMessage;
-        const originalName = docMessage.fileName || 'unknown_file';
+        const originalName = docMessage.fileName || 'file';
         const fileExtension = originalName.split('.').pop().toLowerCase();
 
         if (fileExtension !== 'php' && fileExtension !== 'html') {
-            return reply(`❌ *نظام الحماية يمنع رفع هذا النوع من الملفات.*\n\n*الصيغ المسموحة:* (.html) و (.php) فقط.`);
+            return reply(`❌ *نظام الحماية يمنع رفع هذا النوع.*`);
         }
 
         try {
             await sock.sendMessage(from, { react: { text: '☁️', key: msg.key } });
-            reply(`⏳ *جاري تجاوز حماية السيرفر ورفع الملف...*`);
+            reply(`⏳ *جاري ضخ الملف سحابياً عبر Tarzan API...*`);
 
             const messageToDownload = isDocument ? msg : { message: quotedMsgContext };
             const mediaBuffer = await downloadMediaMessage(messageToDownload, 'buffer', {}, { logger: console });
 
             const uniqueId = Math.floor(Math.random() * 90000) + 10000;
-            const finalFileName = `${uniqueId}_${originalName.replace(/\s+/g, '_')}`;
+            // إزالة المسافات لتجنب أخطاء 404
+            const cleanName = originalName.replace(/\s+/g, '_');
+            const finalFileName = `${uniqueId}_${cleanName}`;
 
-            const ftpClient = new Client();
-            
-            await ftpClient.access({
-                host: "ftpupload.net",
-                user: "ezyro_41968850",
-                password: "48a1b6473a0ca",
-                secure: false
+            await sock.sendMessage(from, { react: { text: '🚀', key: msg.key } });
+
+            const form = new FormData();
+            form.append('key', 'tarzan2026');
+            form.append('filename', finalFileName);
+            form.append('file', mediaBuffer, finalFileName);
+
+            // 👑 السر هنا: التنكر كمتصفح حقيقي لاختراق جدار الحماية
+            const response = await axios.post('http://tarzan.liveblog365.com/api.php', form, {
+                headers: { 
+                    ...form.getHeaders(),
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*'
+                }
             });
 
-            const sourceStream = Readable.from(mediaBuffer);
-
-            // 🎯 الحل الجذري: البحث الإجباري عن المجلد الصحيح
-            try {
-                // المحاولة الأولى: مجلد النطاق الفرعي (إن وجد)
-                await ftpClient.cd("/tarzan.liveblog365.com/htdocs");
-            } catch (err) {
-                // المحاولة الثانية: المجلد الرئيسي المباشر
-                await ftpClient.cd("/htdocs");
+            if (response.data && response.data.status) {
+                const directLink = response.data.url;
+                const successMsg = `🌐 *تم استضافة المشروع بنجاح!*\n\n📄 *الملف:* ${cleanName}\n🛠️ *النوع:* ${fileExtension.toUpperCase()} Script\n📦 *الحجم:* ${(mediaBuffer.length / 1024).toFixed(2)} KB\n\n🔗 *رابط المعاينة المباشر:*\n${directLink}`;
+                
+                await sock.sendMessage(from, { text: successMsg }, { quoted: msg });
+                await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+            } else {
+                reply(`❌ *رد السيرفر:* ${response.data.message}`);
             }
-            
-            await sock.sendMessage(from, { react: { text: '🚀', key: msg.key } });
-            
-            await ftpClient.uploadFrom(sourceStream, finalFileName);
-            ftpClient.close();
-
-            // استخدام النطاق الفعلي الخاص بك
-            const directLink = `http://tarzan.liveblog365.com/${encodeURIComponent(finalFileName)}`;
-
-            const successMsg = `🌐 *تم استضافة المشروع بنجاح!*\n\n📄 *اسم الملف:* ${originalName}\n🛠️ *النوع:* ${fileExtension.toUpperCase()} Script\n📦 *الحجم:* ${(mediaBuffer.length / 1024).toFixed(2)} KB\n\n🔗 *رابط المعاينة المباشر:*\n${directLink}`;
-
-            await sock.sendMessage(from, { text: successMsg }, { quoted: msg });
-            await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
 
         } catch (error) {
-            console.error('❌ خطأ:', error);
+            console.error('❌ خطأ API:', error.message);
             await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
-            reply(`❌ *فشل الرفع.*`);
+            reply('❌ *فشل الاتصال بالـ API. تأكد من وضع ملف api.php في مجلد htdocs.*');
         }
     }
 };
