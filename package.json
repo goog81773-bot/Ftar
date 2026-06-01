@@ -53,7 +53,6 @@
     "basic-ftp": "^5.0.5",
     "pdf-lib": "^1.17.1",
     "google-tts-api": "^2.0.2"
-    "pdfkit": "^0.14.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
