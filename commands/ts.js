@@ -4,69 +4,87 @@ const fs = require('fs');
 const path = require('path');
 const pino = require('pino');
 
-// 🧠 [ذاكرة البوت المؤقتة]: لحفظ صور كل شخص بشكل منفصل حتى لا تتداخل صور الأعضاء
+// 🧠 [ذاكرة البوت المؤقتة]: تخزن الآن نوع الصفحة (صورة أو نص) مع المحتوى
 const pdfSessions = new Map();
 
 module.exports = {
-    name: 'كتاب', // الأمر النهائي لإصدار الكتاب
-    aliases: ['ضف', 'الغاء_الكتاب'], // أوامر فرعية مرتبطة بنفس الملف
+    name: 'كتاب', 
+    aliases: ['ضف', 'الغاء_الكتاب'], 
     execute: async ({ sock, msg, reply, commandName, text, from, sender }) => {
         
-        // 1️⃣ أمر إضافة صورة لمسودة الكتاب
+        // ==========================================
+        // 1️⃣ أمر إضافة (صورة أو نص) لمسودة الكتاب
+        // ==========================================
         if (commandName === 'ضف') {
             const isQuotedImage = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
             
-            if (!isQuotedImage) {
-                return reply('🖼️ *يرجى الرد على الصورة التي تريد إضافتها بكلمة (.ضف)*');
+            // جلب النص المردود عليه، أو النص المكتوب مباشرة بعد أمر .ضف
+            const quotedText = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.conversation || 
+                               msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text;
+            const textToAdd = text || quotedText;
+
+            if (!isQuotedImage && !textToAdd) {
+                return reply('📑 *يرجى الرد على (صورة) أو (نص)، أو كتابة نص بعد كلمة .ضف لإضافته للكتاب.*');
             }
 
             try {
-                // تحميل الصورة بجودة عالية
-                const mediaMsg = { message: msg.message.extendedTextMessage.contextInfo.quotedMessage };
-                const buffer = await downloadMediaMessage(mediaMsg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
-                
                 // جلب مسودة المستخدم الحالية أو إنشاء واحدة جديدة
-                let userImages = pdfSessions.get(sender) || [];
+                let userPages = pdfSessions.get(sender) || [];
                 
                 // حماية الرام: حد أقصى 50 صفحة للكتاب الواحد
-                if (userImages.length >= 50) {
-                    return reply('⚠️ *عذراً، الحد الأقصى للكتاب الواحد هو 50 صورة لتجنب الضغط على السيرفر.*');
+                if (userPages.length >= 50) {
+                    return reply('⚠️ *عذراً، الحد الأقصى للكتاب الواحد هو 50 صفحة لتجنب الضغط على السيرفر.*');
+                }
+
+                if (isQuotedImage) {
+                    // معالجة إضافة الصورة
+                    const mediaMsg = { message: msg.message.extendedTextMessage.contextInfo.quotedMessage };
+                    const buffer = await downloadMediaMessage(mediaMsg, 'buffer', {}, { logger: pino({ level: 'silent' }) });
+                    
+                    userPages.push({ type: 'image', content: buffer });
+                    await reply(`🖼️ *تمت إضافة صفحة (صورة) لمسودتك.*\n📊 *إجمالي الصفحات:* ${userPages.length}`);
+
+                } else if (textToAdd) {
+                    // معالجة إضافة النص
+                    userPages.push({ type: 'text', content: textToAdd });
+                    await reply(`📝 *تمت إضافة صفحة (نصية) لمسودتك.*\n📊 *إجمالي الصفحات:* ${userPages.length}`);
                 }
                 
-                userImages.push(buffer);
-                pdfSessions.set(sender, userImages);
+                pdfSessions.set(sender, userPages);
                 
-                await reply(`✅ *تم الحفظ في مسودتك!*\n📊 *عدد صفحات الكتاب حتى الآن:* ${userImages.length}\n\n📌 لإضافة المزيد، رد على صورة أخرى بـ \`.ضف\`\n🖨️ لطباعة وإصدار الكتاب، أرسل: \`.كتاب [اسم الكتاب الذي تريده]\``);
             } catch (error) {
                 console.error(error);
-                reply('❌ *فشل تحميل الصورة، حاول مرة أخرى.*');
+                reply('❌ *فشل إضافة المحتوى، حاول مرة أخرى.*');
             }
             return;
         }
 
+        // ==========================================
         // 2️⃣ أمر إلغاء وتفريغ المسودة
+        // ==========================================
         if (commandName === 'الغاء_الكتاب') {
             if (pdfSessions.has(sender)) {
                 pdfSessions.delete(sender);
-                return reply('🗑️ *تم حذف جميع الصور من مسودتك بنجاح.*');
+                return reply('🗑️ *تم إتلاف المسودة وحذف جميع الصفحات بنجاح.*');
             } else {
                 return reply('⚠️ *ليس لديك أي مسودة نشطة حالياً.*');
             }
         }
 
-        // 3️⃣ أمر إصدار وتجميع الـ PDF
+        // ==========================================
+        // 3️⃣ أمر إصدار وتجميع الـ PDF (التنسيق الفخم)
+        // ==========================================
         if (commandName === 'كتاب') {
-            const userImages = pdfSessions.get(sender);
+            const userPages = pdfSessions.get(sender);
             
-            if (!userImages || userImages.length === 0) {
-                return reply('⚠️ *مسودتك فارغة!*\nيجب عليك إضافة الصور أولاً عن طريق الرد عليها بـ \`.ضف\`');
+            if (!userPages || userPages.length === 0) {
+                return reply('⚠️ *مسودتك فارغة!*\nأضف نصوصاً أو صوراً عبر أمر \`.ضف\` أولاً.');
             }
             
             await sock.sendMessage(from, { react: { text: '🖨️', key: msg.key } });
-            await reply('⏳ *جاري معالجة الصور وتجليد الكتاب (PDF)...*');
+            await reply('⏳ *جاري تنسيق الصفحات وتجليد الكتاب بطابع VIP...*');
             
             try {
-                // تحديد اسم الكتاب (إذا لم يكتب المستخدم اسماً، نعطيه اسماً تلقائياً)
                 const bookName = text ? text : `Document_${Date.now()}`;
                 const fileName = `${bookName}.pdf`;
                 const filePath = path.join(__dirname, fileName);
@@ -76,15 +94,45 @@ module.exports = {
                 const writeStream = fs.createWriteStream(filePath);
                 doc.pipe(writeStream);
                 
-                // إضافة الصور كصفحات
-                for (const imgBuffer of userImages) {
+                // تصميم الصفحات بناءً على نوعها (صورة أو نص)
+                for (let i = 0; i < userPages.length; i++) {
+                    const page = userPages[i];
                     doc.addPage();
-                    // ضبط أبعاد الصورة لتتناسب مع مقاس صفحة الـ PDF القياسية (A4) مع هوامش
-                    doc.image(imgBuffer, 20, 20, { 
-                        fit: [doc.page.width - 40, doc.page.height - 40],
-                        align: 'center',
-                        valign: 'center'
-                    });
+
+                    if (page.type === 'image') {
+                        // 🖼️ تنسيق صفحة الصورة (توسيط كامل)
+                        doc.image(page.content, 20, 20, { 
+                            fit: [doc.page.width - 40, doc.page.height - 40],
+                            align: 'center',
+                            valign: 'center'
+                        });
+                    } 
+                    else if (page.type === 'text') {
+                        // 📝 تنسيق صفحة النص (إطار فخم وتنسيق أكاديمي)
+                        
+                        // 1. رسم إطار ذهبي فخم حول الصفحة
+                        doc.lineWidth(2);
+                        doc.rect(30, 30, doc.page.width - 60, doc.page.height - 60).stroke('#C5A059'); 
+                        
+                        // 2. إطار داخلي رفيع لمزيد من الفخامة
+                        doc.lineWidth(0.5);
+                        doc.rect(35, 35, doc.page.width - 70, doc.page.height - 70).stroke('#C5A059');
+
+                        // 3. كتابة رقم الصفحة في الأعلى
+                        doc.fontSize(10).fillColor('#888888').text(`الصفحة ${i + 1}`, 0, 45, { align: 'center' });
+                        
+                        // 4. كتابة النص بهوامش مريحة للعين ومحاذاة لليمين
+                        // ملاحظة: لدعم اللغة العربية بشكل مثالي، يستحسن وضع ملف خط (مثل arial.ttf) في السيرفر
+                        doc.fontSize(14).fillColor('#222222').text(page.content, 50, 80, {
+                            align: 'right',
+                            width: doc.page.width - 100,
+                            lineGap: 8,
+                            features: ['rtla'] // تفعيل خواص الكتابة من اليمين لليسار
+                        });
+
+                        // 5. تذييل الصفحة (حقوق البوت)
+                        doc.fontSize(10).fillColor('#CCCCCC').text('صُنع بواسطة 𝑻𝑨𝑹𝒁𝑨𝑵 𝑽𝑰𝑷', 0, doc.page.height - 55, { align: 'center' });
+                    }
                 }
                 
                 doc.end();
@@ -95,17 +143,17 @@ module.exports = {
                         document: fs.readFileSync(filePath), 
                         mimetype: 'application/pdf', 
                         fileName: fileName,
-                        caption: `📚 *تم الانتهاء من صنع الكتاب بنجاح!*\n\n📑 *اسم الكتاب:* ${bookName}\n📊 *عدد الصفحات:* ${userImages.length}\n\n*— 𝑻𝑨𝑹𝒁𝑨𝑵 𝑽𝑰𝑷 ⚔️*`
+                        caption: `📚 *تم إصدار الكتاب بنجاح!*\n\n📑 *العنوان:* ${bookName}\n📊 *عدد الصفحات:* ${userPages.length}\n✨ *النوع:* (نصوص + صور مصقولة)\n\n*— 𝑻𝑨𝑹𝒁𝑨𝑵 𝑽𝑰𝑷 ⚔️*`
                     }, { quoted: msg });
                     
-                    // تنظيف السيرفر من الملفات المؤقتة
+                    // تنظيف السيرفر
                     fs.unlinkSync(filePath);
                     pdfSessions.delete(sender);
                 });
                 
             } catch (err) {
                 console.error('خطأ في صانع PDF:', err);
-                reply('❌ *حدث خطأ أثناء معالجة المستند.*');
+                reply('❌ *حدث خطأ أثناء معالجة المستند وتنسيق الصفحات.*');
             }
         }
     }
