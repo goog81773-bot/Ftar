@@ -1,6 +1,6 @@
 module.exports = {
     name: 'tts',
-    aliases: ['انطق', 'صوت', 'قول'],
+    aliases: ['انطق','تكلم', 'قول'],
     execute: async ({ sock, msg, text, reply, from }) => {
         
         let targetText = text;
