@@ -213,6 +213,10 @@
         .btn-qr { background: linear-gradient(135deg, #00f3ff, #0051ff); box-shadow: 0 10px 25px rgba(0, 243, 255, 0.4); }
         .btn-purple { background: linear-gradient(135deg, #a855f7, #6b21a8); box-shadow: 0 8px 25px rgba(168, 85, 247, 0.4); }
         .btn-danger { background: linear-gradient(135deg, #ff0000, #8a0000); box-shadow: 0 8px 25px rgba(255, 0, 0, 0.4); }
+        /* زر الخطين الزرقاء */
+        .btn-blue-ticks { background: linear-gradient(135deg, #007bff, #0056b3); box-shadow: 0 8px 25px rgba(0, 123, 255, 0.4); }
+        /* زر الخطين الغبراء */
+        .btn-grey-ticks { background: linear-gradient(135deg, #6c757d, #495057); box-shadow: 0 8px 25px rgba(108, 117, 125, 0.4); }
 
         .btn-copy {
             background: rgba(0, 243, 255, 0.1); color: var(--secondary);
@@ -604,6 +608,23 @@
                         </div>
                     </div>
 
+                    <!-- 🔵🔵 تمت إضافة قسم إعدادات استلام الرسائل هنا 🔵🔵 -->
+                    <div class="glass-card p-5 border-l-4 border-l-[#a855f7]">
+                        <h3 class="font-black text-[#a855f7] text-xs mb-4 border-b border-[#a855f7]/30 pb-2 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fa-solid fa-check-double"></i> إعدادات استلام الرسائل
+                        </h3>
+                        <div class="flex flex-col gap-3">
+                            <button onclick="setReadReceipts(true)" class="btn-action btn-blue-ticks w-full text-sm">
+                                <i class="fa-solid fa-check-double text-[#00f3ff]"></i> استلام بالخطين الزرقاء (قراءة)
+                            </button>
+                            <button onclick="setReadReceipts(false)" class="btn-action btn-grey-ticks w-full text-sm">
+                                <i class="fa-solid fa-check text-gray-300"></i> استلام بالخطين الغبراء (توصيل فقط)
+                            </button>
+                        </div>
+                        <p class="text-xs text-center mt-4 font-bold text-gray-400">الحالة الحالية: <span id="currentReadStatus" class="text-[#00f3ff]">غير معروف</span></p>
+                    </div>
+                    <!-- 🔵🔵 نهاية الإضافة 🔵🔵 -->
+
                     <button onclick="saveSettings()" class="btn-action w-full py-4 text-lg shadow-[0_10px_30px_rgba(0,243,255,0.4)] mt-2">
                         <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
                     </button>
@@ -710,6 +731,7 @@
         // ==========================================
         let verifiedPassword = "";
         let currentBadWords = []; 
+        let currentReadReceiptsState = false; // 🔵 تمت إضافة متغير لتخزين حالة الخطين
 
         function switchPage(pageId) {
             document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
@@ -786,6 +808,15 @@
         function removeBadWord(index) {
             currentBadWords.splice(index, 1);
             renderBadWords();
+        }
+
+        // 🔵 تمت إضافة دالة للتحكم في تغيير الزرين
+        function setReadReceipts(isBlue) {
+            currentReadReceiptsState = isBlue;
+            const statusEl = document.getElementById('currentReadStatus');
+            statusEl.textContent = isBlue ? 'الخطين الزرقاء مفعلة 🔵' : 'الخطين الغبراء مفعلة ⚪';
+            statusEl.style.color = isBlue ? '#00f3ff' : '#9ca3af';
+            showToast(isBlue ? 'تم تحديد وضع الخطين الزرقاء (تأكد من الحفظ)' : 'تم تحديد وضع الخطين الغبراء (تأكد من الحفظ)');
         }
 
         async function requestPairCode() {
@@ -903,6 +934,12 @@
                 document.getElementById('autoReactToggle').checked = data.autoReact;
                 document.getElementById('reactEmoji').value = data.reactEmoji || '⚡';
 
+                // 🔵 تحديث واجهة الخطين الزرقاء/الغبراء عند فتح الإعدادات بناءً على ما جاء من السيرفر
+                currentReadReceiptsState = data.readReceipts || false;
+                const statusEl = document.getElementById('currentReadStatus');
+                statusEl.textContent = currentReadReceiptsState ? 'الخطين الزرقاء مفعلة 🔵' : 'الخطين الغبراء مفعلة ⚪';
+                statusEl.style.color = currentReadReceiptsState ? '#00f3ff' : '#9ca3af';
+
                 showToast('🔓 تم فتح لوحة التحكم بنجاح');
             } catch (err) {
                 showToast(err.message, 'error');
@@ -929,7 +966,8 @@
                         antiBadWords: document.getElementById('antiBadWordsToggle').checked,
                         badWordsList: currentBadWords,
                         autoReact: document.getElementById('autoReactToggle').checked, 
-                        reactEmoji: document.getElementById('reactEmoji').value.trim() || '⚡'
+                        reactEmoji: document.getElementById('reactEmoji').value.trim() || '⚡',
+                        readReceipts: currentReadReceiptsState // 🔵 إرسال حالة الخطين للسيرفر
                     })
                 });
                 const data = await res.json();
