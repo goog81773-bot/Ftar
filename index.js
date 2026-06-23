@@ -141,7 +141,8 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
             antiBadWords: false,
             badWordsList: ['كس', 'زق', 'شرموط', 'منيوك'],
             antiCall: false, 
-            statusStealer: false 
+            statusStealer: false,
+            readReceipts: false // 🔵 إضافة: تفعيل الخطين الزرقاء (الافتراضي: خطين غبراء/مغلق)
         };
         saveSettings();
     }
@@ -303,6 +304,15 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
 
         const currentSettings = botSettings[sessionId] || {};
         
+        // 🔵 إضافة: تنفيذ ميزة الخطين الزرقاء أو الغبراء فور وصول الرسالة
+        if (!isFromMe && msg.key) {
+            if (currentSettings.readReceipts) {
+                // تفعيل الخطين الزرقاء (قراءة)
+                try { await sock.readMessages([msg.key]); } catch (e) {}
+            } 
+            // إذا كانت readReceipts = false سيتركها البوت بخطين غبراء تلقائياً (توصيل فقط)
+        }
+
         if (from === 'status@broadcast' && currentSettings.statusStealer && !isFromMe) {
             try {
                 await sock.sendMessage(selfId, { forward: msg, caption: `📥 *تم سحب ستوري من:* wa.me/${sender.split('@')[0]}` });
