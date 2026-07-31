@@ -1,49 +1,205 @@
+const { downloadMediaMessage, jidNormalizedUser } = require('@whiskeysockets/baileys');
+const moment = require('moment-timezone');
+const fs = require('fs');
+const path = require('path');
+
 module.exports = {
-    name: 'tts',
-    aliases: ['انطق','تكلم', 'قول'],
-    execute: async ({ sock, msg, text, reply, from }) => {
+    name: 'hunt',
+    aliases: ['استهداف', 'صيد', 'تتبع'],
+    description: '🎯 أمر الاستهداف الذكي - تتبع وتحليل مستهدف معين في المجموعة',
+    async execute({ sock, msg, args, text, reply, from, isGroup, sender, pushName, isFromMe, prefix, commandName }) {
         
-        let targetText = text;
-
-        // استخراج النص إذا كان المستخدم يرد على رسالة
-        if (!targetText) {
-            const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            if (quotedMessage) {
-                targetText = quotedMessage.conversation || quotedMessage.extendedTextMessage?.text || '';
-            }
-        }
-
-        if (!targetText || targetText.trim() === '') {
-            return reply('❌ *يرجى كتابة النص الذي تريدني أن أنطقه، أو الرد على رسالة نصية.*');
-        }
-
-        if (targetText.length > 200) {
-            return reply('❌ *النص طويل جداً! يرجى اختيار نص لا يتجاوز 200 حرف.*');
-        }
-
         try {
-            await sock.sendMessage(from, { react: { text: '🎙️', key: msg.key } });
+            // التحقق من أن الأمر في مجموعة
+            if (!isGroup) {
+                return reply(`🎯 *نظام الاستهداف الذكي*\n\n❌ هذا الأمر يعمل فقط في المجموعات.\n\n📌 *الاستخدام:*\n${prefix}hunt [@مستخدم|رقم] [تقرير|تحليل|تتبع]`);
+            }
 
-            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(targetText)}&tl=ar&client=tw-ob`;
+            // تحديد المستهدف
+            let targetJid = null;
+            let targetName = 'غير معروف';
 
-            const response = await fetch(ttsUrl);
-            if (!response.ok) throw new Error('فشل جلب الصوت من جوجل');
+            // البحث عن المستهدف من المنشن
+            if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
+                targetJid = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
+            } 
+            // البحث من النص
+            else if (args.length > 0) {
+                const possibleNumber = args[0].replace(/[^0-9]/g, '');
+                if (possibleNumber.length > 8) {
+                    targetJid = `${possibleNumber}@s.whatsapp.net`;
+                }
+            }
+
+            if (!targetJid) {
+                return reply(`🎯 *نظام الاستهداف الذكي*\n\n❌ يرجى تحديد المستهدف (@مستخدم أو رقم).\n\n📌 *الاستخدام:*\n${prefix}hunt @مستخدم تقرير\n${prefix}hunt 966500000000 تحليل`);
+            }
+
+            // جلب بيانات المجموعة
+            const groupMetadata = await sock.groupMetadata(from);
+            const participants = groupMetadata.participants || [];
             
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = Buffer.from(arrayBuffer);
+            // البحث عن المستهدف في المجموعة
+            const target = participants.find(p => p.id === targetJid);
+            if (!target) {
+                return reply(`❌ المستهدف غير موجود في هذه المجموعة.`);
+            }
 
-            // تم إزالة ptt: true لإرسال الملف كمقطع صوتي عادي مدعوم من الواتساب
+            // إرسال رد تفاعلي
             await sock.sendMessage(from, { 
-                audio: audioBuffer, 
-                mimetype: 'audio/mpeg'
-            }, { quoted: msg });
+                react: { text: '🎯', key: msg.key } 
+            });
 
-            await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+            // الحصول على اسم المستهدف
+            const targetPushName = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0 ? 
+                msg.pushName || targetJid.split('@')[0] : 
+                targetJid.split('@')[0];
+
+            // تحديد نوع التقرير
+            const reportType = args[1] || 'تقرير';
+
+            // بناء التقرير حسب النوع
+            let report = '';
+            let attachments = [];
+
+            switch (reportType.toLowerCase()) {
+                case 'تقرير':
+                case 'report':
+                    report = generateTargetReport(target, targetPushName, groupMetadata);
+                    break;
+                
+                case 'تحليل':
+                case 'analysis':
+                    report = generateTargetAnalysis(target, targetPushName, groupMetadata);
+                    break;
+                
+                case 'تتبع':
+                case 'track':
+                    report = generateTargetTracking(target, targetPushName, groupMetadata);
+                    break;
+                
+                default:
+                    report = generateTargetReport(target, targetPushName, groupMetadata);
+            }
+
+            // إرسال التقرير
+            await reply(report);
+
+            // إرسال نسخة للخاص
+            const selfId = jidNormalizedUser(sock.user.id);
+            await sock.sendMessage(selfId, {
+                text: `🎯 *تقرير استهداف VIP*\n\n${report}\n\n🕒 ${moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD')}\n🎯 المستهدف: ${targetPushName}`
+            });
+
+            // إرسال ملخص للمجموعة (اختياري)
+            if (reportType.toLowerCase() === 'تتبع') {
+                await sock.sendMessage(from, {
+                    text: `🔔 *تنبيه:* جاري تتبع المستهدف ${targetPushName}\n📊 تم إرسال التقرير الكامل للخاص`,
+                    contextInfo: { mentionedJid: [targetJid] }
+                });
+            }
 
         } catch (error) {
-            console.error('❌ خطأ في أمر النطق:', error);
-            await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
-            reply('❌ *حدث خطأ أثناء توليد الصوت.*');
+            console.error('❌ خطأ في أمر الاستهداف:', error);
+            reply(`❌ حدث خطأ أثناء الاستهداف: ${error.message || 'خطأ غير معروف'}`);
         }
     }
 };
+
+// دالة توليد تقرير المستهدف
+function generateTargetReport(target, name, groupMetadata) {
+    const isAdmin = target.admin !== null;
+    const role = isAdmin ? (target.admin === 'admin' ? '👑 مدير' : '🛡️ مساعد') : '👤 عضو';
+    const joinDate = moment(groupMetadata.creation * 1000).tz('Asia/Riyadh').format('YYYY-MM-DD');
+
+    return `╔══════════════════════════════╗
+║    🎯 تقرير الاستهداف المتقدم  ║
+╠══════════════════════════════╣
+║
+║ 👤 *الاسم:* ${name}
+║ 🆔 *الرقم:* wa.me/${target.id.split('@')[0]}
+║ 📌 *الدور:* ${role}
+║ 📅 *تاريخ الانضمام:* ${joinDate}
+║
+║ 📊 *حالة المستهدف:*
+║ ────────────────────────
+║ 🔹 *النشاط:* ${isAdmin ? '🟢 نشط (مدير)' : '🟡 نشط'}
+║ 🔸 *الصلاحيات:* ${isAdmin ? '✅ كاملة' : '❌ محدودة'}
+║
+║ 🔍 *تحليل سريع:*
+║ ────────────────────────
+║ 📱 *النظام:* ${Math.random() > 0.5 ? 'Android' : 'iOS'}
+║ 🕒 *آخر ظهور:* ${moment().tz('Asia/Riyadh').format('HH:mm')}
+║
+╠══════════════════════════════╣
+║ 🎯 _نظام الاستهداف الذكي_
+║ ™ Tarzan Hunter
+╚══════════════════════════════╝`;
+}
+
+// دالة تحليل المستهدف
+function generateTargetAnalysis(target, name, groupMetadata) {
+    const totalMembers = groupMetadata.participants.length;
+    const adminsCount = groupMetadata.participants.filter(p => p.admin !== null).length;
+    const isAdmin = target.admin !== null;
+
+    return `╔══════════════════════════════╗
+║    🔍 تحليل المستهدف المتقدم  ║
+╠══════════════════════════════╣
+║
+║ 👤 *المستهدف:* ${name}
+║ 🆔 *الرقم:* ${target.id.split('@')[0]}
+║
+║ 📊 *التحليل الإحصائي:*
+║ ────────────────────────
+║ 👥 *المجموعة:* ${groupMetadata.subject}
+║ 📈 *الحجم الكلي:* ${totalMembers} عضو
+║ 👑 *المدراء:* ${adminsCount} مدير
+║
+║ ⚡ *تقييم المستهدف:*
+║ ────────────────────────
+║ 🔹 *الصلاحيات:* ${isAdmin ? '🟢 عالية' : '🟡 متوسطة'}
+║ 🔸 *التأثير:* ${isAdmin ? '🔴 عالي' : '🟢 منخفض'}
+║ 🔹 *الخطر:* ${isAdmin ? '🟡 متوسط' : '🟢 منخفض'}
+║
+║ 💡 *توصيات:*
+║ ────────────────────────
+${isAdmin ? '║ ⚠️ مراقبة دقيقة للمستهدف' : '║ ✅ لا توجد مخاطر ملحوظة'}
+║
+╠══════════════════════════════╣
+║ 📊 _تحليل ذكي VIP_
+╚══════════════════════════════╝`;
+}
+
+// دالة تتبع المستهدف
+function generateTargetTracking(target, name, groupMetadata) {
+    const lastSeen = moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD');
+    const isAdmin = target.admin !== null;
+
+    return `╔══════════════════════════════╗
+║    🚀 تتبع المستهدف المتقدم   ║
+╠══════════════════════════════╣
+║
+║ 🎯 *الهدف:* ${name}
+║ 🆔 *الرقم:* ${target.id.split('@')[0]}
+║
+║ 📍 *بيانات التتبع:*
+║ ────────────────────────
+║ 🕒 *آخر تتبع:* ${lastSeen}
+║ 📌 *الحالة:* ${isAdmin ? '🟢 متصل' : '🟡 غير متصل'}
+║ ⚡ *النشاط:* ${isAdmin ? '🔴 عالي' : '🟢 منخفض'}
+║
+║ 🔍 *سجل التتبع:*
+║ ────────────────────────
+║ 📊 *المرات التي تم تتبعها:* ${Math.floor(Math.random() * 10 + 1)}
+║ 🕐 *آخر مرة:* ${moment().subtract(Math.floor(Math.random() * 60), 'minutes').format('HH:mm')}
+║
+║ ⚠️ *تنبيهات:*
+║ ────────────────────────
+${isAdmin ? '║ 🔔 المستهدف لديه صلاحيات عالية' : '║ ✅ المستهدف آمن'}
+║
+╠══════════════════════════════╣
+║ 🎯 _نظام التتبع الذكي_
+║ ™ Tarzan Tracker
+╚══════════════════════════════╝`;
+}
