@@ -1,0 +1,22 @@
+{
+  "name": "طرزان VIP",
+  "short_name": "طرزان",
+  "description": "نظام إدارة متقدم لـ WhatsApp",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05010f",
+  "theme_color": "#05010f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://b.top4top.io/p_3489wk62d0.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://b.top4top.io/p_3489wk62d0.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
