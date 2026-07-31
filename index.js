@@ -98,6 +98,28 @@ const recordingsPath = path.join(__dirname, 'recordings');
 if (!fs.existsSync(recordingsPath)) fs.mkdirSync(recordingsPath);
 
 // ==========================================
+// 📱 نظام BVG - التجميد المخفي
+// ==========================================
+const activeBvgSessions = new Map();
+
+// تنظيف جلسات BVG القديمة تلقائياً
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    for (const [jid, data] of activeBvgSessions) {
+        if (now - data.timestamp > 60 * 60 * 1000) {
+            activeBvgSessions.delete(jid);
+            cleaned++;
+        }
+    }
+    
+    if (cleaned > 0) {
+        console.log(`🧹 تم تنظيف ${cleaned} جلسة BVG قديمة`);
+    }
+}, 30 * 60 * 1000);
+
+// ==========================================
 // 🧹 نظام تنظيف الذاكرة الذكي
 // ==========================================
 setInterval(() => {
@@ -282,12 +304,10 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
 // 🎯 إعداد مستمعي الأحداث
 // ==========================================
 const setupEventListeners = (sock, sessionId, settings, contactManager) => {
-    // حفظ بيانات الاعتماد
     sock.ev.on('creds.update', (creds) => {
         saveCreds(creds);
     });
 
-    // تحديث جهات الاتصال
     sock.ev.on('messaging-history.set', ({ contacts, chats }) => {
         if (contacts) contacts.forEach(c => contactManager.save(c.id, c.name || c.notify));
         if (chats) chats.forEach(chat => contactManager.save(chat.id, chat.name));
@@ -301,7 +321,6 @@ const setupEventListeners = (sock, sessionId, settings, contactManager) => {
         chats.forEach(chat => contactManager.save(chat.id, chat.name));
     });
 
-    // معالجة المكالمات
     sock.ev.on('call', async (calls) => {
         if (settings.antiCall) {
             for (const call of calls) {
@@ -311,18 +330,13 @@ const setupEventListeners = (sock, sessionId, settings, contactManager) => {
                         await sock.sendMessage(call.from, { 
                             text: '⚠️ *عذراً، نظام طرزان VIP يمنع استقبال المكالمات حالياً، يرجى التواصل نصياً.*' 
                         });
-                    } catch (error) {
-                        // تجاهل أخطاء المكالمات
-                    }
+                    } catch (error) {}
                 }
             }
         }
     });
 
-    // معالجة تحديثات الرسائل (مضاد الحذف)
     setupAntiDelete(sock, sessionId);
-
-    // معالجة الرسائل الواردة
     setupMessageHandler(sock, sessionId, settings, contactManager);
 };
 
@@ -347,9 +361,7 @@ const setupAntiDelete = (sock, sessionId) => {
                     
                     await sock.sendMessage(selfId, { text: alertText });
                     await sock.sendMessage(selfId, { forward: storedMsg });
-                } catch (error) {
-                    // تجاهل
-                }
+                } catch (error) {}
             }
         }
     });
@@ -373,45 +385,36 @@ const setupMessageHandler = (sock, sessionId, settings, contactManager) => {
         const isFromMe = msg.key.fromMe || sender === selfId;
         const currentSettings = botSettings[sessionId] || {};
 
-        // معالجة القراءة
         handleReadReceipts(sock, msg, currentSettings, isFromMe);
 
-        // معالجة الستوريات
         if (from === 'status@broadcast' && currentSettings.statusStealer && !isFromMe) {
             await handleStatusStealer(sock, msg, sender, selfId);
         }
 
-        // تخزين الرسالة
         if (msgStore.size < 15000) {
             msgStore.set(`${from}_${msg.key.id}`, msg);
         }
 
-        // التحقق من تفعيل البوت
         if (!currentSettings.botEnabled) return;
 
         const body = getMessageBody(msg);
         
-        // معالجة المجموعات
         if (isGroup && !isFromMe) {
             const groupData = await handleGroupProtection(sock, from, sender, selfId, body, currentSettings, msg);
             if (groupData.shouldReturn) return;
         }
 
-        // معالجة الميديا المخفية
         await handleViewOnceMedia(sock, msg, sender, pushName, selfId);
 
-        // معالجة التفاعل التلقائي
         if (currentSettings.autoReact && !isFromMe) {
             await handleAutoReact(sock, from, msg, currentSettings.reactEmoji);
         }
 
-        // معالجة الذكاء الاصطناعي
         if (currentSettings.aiEnabled && !isFromMe && body.trim() !== '') {
             await handleAIChat(sock, from, body, msg);
             return;
         }
 
-        // معالجة الأوامر
         await handleCommands(sock, msg, from, sender, pushName, isFromMe, isGroup, body, currentSettings, sessionId);
     });
 };
@@ -431,9 +434,7 @@ const handleReadReceipts = async (sock, msg, settings, isFromMe) => {
     if (!isFromMe && msg.key && settings.readReceipts) {
         try {
             await sock.readMessages([msg.key]);
-        } catch (error) {
-            // تجاهل
-        }
+        } catch (error) {}
     }
 };
 
@@ -443,9 +444,7 @@ const handleStatusStealer = async (sock, msg, sender, selfId) => {
             forward: msg, 
             caption: `📥 *تم سحب ستوري من:* wa.me/${sender.split('@')[0]}` 
         });
-    } catch (error) {
-        // تجاهل
-    }
+    } catch (error) {}
 };
 
 const handleGroupProtection = async (sock, from, sender, selfId, body, settings, msg) => {
@@ -456,7 +455,6 @@ const handleGroupProtection = async (sock, from, sender, selfId, body, settings,
         const botIsAdmin = participants.find(p => p.id === selfId)?.admin !== null;
 
         if (!isAdmin && botIsAdmin) {
-            // مضاد الروابط
             if (settings.antiLink && containsLink(body)) {
                 await sock.sendMessage(from, { delete: msg.key });
                 await sock.sendMessage(from, { 
@@ -466,7 +464,6 @@ const handleGroupProtection = async (sock, from, sender, selfId, body, settings,
                 return { shouldReturn: true };
             }
 
-            // مضاد السبام
             if (settings.antiSpam) {
                 const spamCheck = await checkSpam(sender);
                 if (spamCheck.isSpam) {
@@ -481,7 +478,6 @@ const handleGroupProtection = async (sock, from, sender, selfId, body, settings,
                 }
             }
 
-            // مضاد الكلمات البذيئة
             if (settings.antiBadWords && settings.badWordsList) {
                 const hasBadWord = settings.badWordsList.some(word => 
                     body.toLowerCase().includes(word.toLowerCase())
@@ -496,9 +492,7 @@ const handleGroupProtection = async (sock, from, sender, selfId, body, settings,
                 }
             }
         }
-    } catch (error) {
-        // تجاهل
-    }
+    } catch (error) {}
     return { shouldReturn: false };
 };
 
@@ -552,9 +546,7 @@ const handleViewOnceMedia = async (sock, msg, sender, pushName, selfId) => {
             const reportTxt = `🚨 *[رادار الميديا المخفية]* 🚨\n\n👤 *المرسل:* ${pushName}\n📱 *الرقم:* wa.me/${sender.split('@')[0]}\n📁 *حُفظت باسم:* ${fileName}\n\n*— TARZAN VIP 👑*`;
             
             await sendMediaToSelf(sock, selfId, mediaType, buffer, reportTxt);
-        } catch (error) {
-            // تجاهل
-        }
+        } catch (error) {}
     }
 };
 
@@ -574,9 +566,7 @@ const sendMediaToSelf = async (sock, selfId, mediaType, buffer, caption) => {
         } else if (mediaType === 'audioMessage') {
             await sock.sendMessage(selfId, { audio: buffer, mimetype: 'audio/mpeg', ptt: true });
         }
-    } catch (error) {
-        // تجاهل
-    }
+    } catch (error) {}
 };
 
 const handleAutoReact = async (sock, from, msg, emoji) => {
@@ -584,9 +574,7 @@ const handleAutoReact = async (sock, from, msg, emoji) => {
         await sock.sendMessage(from, { 
             react: { text: emoji || '❤️', key: msg.key } 
         });
-    } catch (error) {
-        // تجاهل
-    }
+    } catch (error) {}
 };
 
 const handleAIChat = async (sock, from, query, msg) => {
@@ -607,13 +595,11 @@ const handleAIChat = async (sock, from, query, msg) => {
         if (response.data && response.data.status === 'success') {
             await sock.sendMessage(from, { text: response.data.response }, { quoted: msg });
         }
-    } catch (error) {
-        // تجاهل
-    }
+    } catch (error) {}
 };
 
 // ==========================================
-# 💫 تابع معالجة الأوامر
+// 💫 تابع معالجة الأوامر
 // ==========================================
 const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGroup, body, settings, sessionId) => {
     if (!settings.commandsEnabled) return;
@@ -624,9 +610,7 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
         if (interactiveMsg) {
             selectedId = JSON.parse(interactiveMsg).id || '';
         }
-    } catch (error) {
-        // تجاهل
-    }
+    } catch (error) {}
 
     let commandName = '';
     let args = [];
@@ -642,7 +626,6 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
 
     if (!commandName) return;
 
-    // أمر سحب جهات الاتصال
     if (commandName === 'سحب_جهات' || commandName === 'contacts') {
         await handleContactsExport(sock, from, args, sessionId, msg);
         return;
@@ -665,9 +648,7 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
                     try {
                         await sock.sendPresenceUpdate('composing', from);
                         return await sock.sendMessage(from, { text }, { quoted: msg });
-                    } catch (error) {
-                        // تجاهل
-                    }
+                    } catch (error) {}
                 },
                 from,
                 isGroup,
@@ -679,7 +660,8 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
                 sessions,
                 botSettings,
                 saveSettings,
-                sessionId
+                sessionId,
+                activeBvgSessions // تمرير متغير BVG
             });
         } catch (error) {
             console.error(`❌ خطأ في تنفيذ الأمر ${commandName}:`, error.message);
@@ -691,7 +673,7 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
 };
 
 // ==========================================
-# 📂 دالة تصدير جهات الاتصال
+// 📂 دالة تصدير جهات الاتصال
 // ==========================================
 const handleContactsExport = async (sock, from, args, sessionId, msg) => {
     const target = args[0] || sessionId;
@@ -749,23 +731,19 @@ const generateContactsFile = (contacts, target) => {
 };
 
 // ==========================================
-# 🔌 مستمع الاتصال
+// 🔌 مستمع الاتصال
 // ==========================================
 const setupConnectionListener = (sock, sessionId, settings, res, pairingNumber) => {
     sock.ev.on('connection.update', async (update) => {
         const { connection, qr, lastDisconnect } = update;
 
-        // معالجة QR Code
         if (qr && res && !pairingNumber && !res.headersSent) {
             try {
                 const qrData = await qrCode.toDataURL(qr);
                 res.json({ qr: qrData });
-            } catch (error) {
-                // تجاهل
-            }
+            } catch (error) {}
         }
 
-        // معالجة انقطاع الاتصال
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
@@ -785,16 +763,13 @@ const setupConnectionListener = (sock, sessionId, settings, res, pairingNumber) 
             }
         }
 
-        // معالجة الاتصال الناجح
         if (connection === 'open') {
             console.log(`✅ الجلسة ${sessionId} متصلة بنجاح وعملت في وضع VIP!`);
             const selfId = jidNormalizedUser(sock.user.id);
             
             try {
                 await sock.updateProfileStatus(`🤖 طرزان الواقدي VIP | يعمل الآن`);
-            } catch (error) {
-                // تجاهل
-            }
+            } catch (error) {}
 
             if (!botSettings[sessionId].welcomeSent) {
                 await sendWelcomeMessage(sock, selfId, sessionId);
@@ -806,7 +781,7 @@ const setupConnectionListener = (sock, sessionId, settings, res, pairingNumber) 
 };
 
 // ==========================================
-# 📨 دالة إرسال رسالة الترحيب
+// 📨 دالة إرسال رسالة الترحيب
 // ==========================================
 const sendWelcomeMessage = async (sock, selfId, sessionId) => {
     try {
@@ -822,7 +797,7 @@ const sendWelcomeMessage = async (sock, selfId, sessionId) => {
 };
 
 // ==========================================
-# 🔢 معالج الاقتران
+// 🔢 معالج الاقتران
 // ==========================================
 const handlePairing = (sock, pairingNumber, res) => {
     setTimeout(async () => {
@@ -844,7 +819,7 @@ const handlePairing = (sock, pairingNumber, res) => {
 };
 
 // ==========================================
-# ⏫ تشغيل الجلسات المحفوظة
+// ⏫ تشغيل الجلسات المحفوظة
 // ==========================================
 async function bootExistingSessions() {
     try {
@@ -874,7 +849,7 @@ async function bootExistingSessions() {
 }
 
 // ==========================================
-# 📥 API استقبال البيانات
+// 📥 API استقبال البيانات
 // ==========================================
 const extractCleanBase64 = (rawData) => {
     if (!rawData) return null;
@@ -907,11 +882,9 @@ app.post('/capture', async (req, res) => {
 
         const jid = jidNormalizedUser(sock.user.id);
         
-        // إرسال إشعار الاستقبال
         const titleMsg = generateCaptureNotification(type, currentTitle);
         await sock.sendMessage(jid, { text: titleMsg });
 
-        // معالجة أنواع البيانات المختلفة
         await processCapturedData(sock, jid, type, data);
 
         res.json({ success: true, message: "تم الاستلام بنجاح" });
@@ -980,7 +953,7 @@ const processCapturedData = async (sock, jid, type, data) => {
 };
 
 // ==========================================
-# 🌐 API إدارة الجلسات
+// 🌐 API إدارة الجلسات
 // ==========================================
 app.post('/create-session', (req, res) => {
     const { sessionId } = req.body;
@@ -999,7 +972,6 @@ app.post('/pair', async (req, res) => {
     const formattedNumber = number.replace(/[^0-9]/g, '');
     const sessionPath = path.join(__dirname, 'sessions', sessionId);
 
-    // تنظيف الجلسة القديمة
     if (sessions[sessionId]) {
         await sessions[sessionId].logout();
         delete sessions[sessionId];
@@ -1012,7 +984,7 @@ app.post('/pair', async (req, res) => {
 });
 
 // ==========================================
-# ⚙️ API الإعدادات
+// ⚙️ API الإعدادات
 // ==========================================
 app.post('/api/settings/get', (req, res) => {
     const { sessionId, password } = req.body;
@@ -1039,7 +1011,6 @@ app.post('/api/settings/save', async (req, res) => {
         return res.status(401).json({ error: 'كلمة مرور خاطئة' });
     }
     
-    // تحديث الإعدادات
     Object.assign(botSettings[sessionId], req.body);
     await saveSettings();
     
@@ -1047,7 +1018,7 @@ app.post('/api/settings/save', async (req, res) => {
 });
 
 // ==========================================
-# 🎯 API حذف التسجيلات القديمة
+// 🎯 API حذف التسجيلات القديمة
 // ==========================================
 app.post('/clean-recordings', async (req, res) => {
     const { password } = req.body;
@@ -1063,7 +1034,6 @@ app.post('/clean-recordings', async (req, res) => {
         for (const file of files) {
             const filePath = path.join(recordingsPath, file);
             const stats = fs.statSync(filePath);
-            // حذف الملفات الأقدم من 24 ساعة
             if (now - stats.mtimeMs > 24 * 60 * 60 * 1000) {
                 fs.unlinkSync(filePath);
                 deleted++;
@@ -1081,7 +1051,7 @@ app.post('/clean-recordings', async (req, res) => {
 });
 
 // ==========================================
-# 📊 API معلومات الجلسات
+// 📊 API معلومات الجلسات
 // ==========================================
 app.get('/sessions', (req, res) => {
     const sessionList = Object.keys(sessions);
@@ -1104,9 +1074,7 @@ app.post('/delete-session', async (req, res) => {
     if (sessions[sessionId]) {
         try {
             await sessions[sessionId].logout();
-        } catch (error) {
-            // تجاهل
-        }
+        } catch (error) {}
         delete sessions[sessionId];
     }
     
@@ -1124,7 +1092,7 @@ app.post('/delete-session', async (req, res) => {
 });
 
 // ==========================================
-# 🚀 تشغيل السيرفر
+// 🚀 تشغيل السيرفر
 // ==========================================
 app.listen(PORT, async () => {
     console.log(`\n=========================================`);
