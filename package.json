@@ -1,6 +1,6 @@
 {
   "name": "tarzan-bot-pro",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Premium WhatsApp Bot with Multi-Session, AI, and Advanced Media Processing",
   "main": "index.js",
   "scripts": {
@@ -52,9 +52,37 @@
     "ms": "^2.1.3",
     "basic-ftp": "^5.0.5",
     "pdf-lib": "^1.17.1",
-    "google-tts-api": "^2.0.2"
+    "google-tts-api": "^2.0.2",
+    "node-gtts": "^2.0.2",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "compression": "^1.7.4",
+    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
+    "express-rate-limit": "^7.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "redis": "^4.6.13",
+    "bull": "^4.12.2",
+    "winston": "^3.13.0",
+    "sharp": "^0.33.4",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Tarzan Al-Waqdi",
+  "license": "MIT",
+  "keywords": [
+    "whatsapp-bot",
+    "baileys",
+    "multi-session",
+    "ai-bot",
+    "tarzan",
+    "whatsapp-api"
+  ]
 }
