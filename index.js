@@ -94,6 +94,9 @@ if (!fs.existsSync(sessionsPath)) fs.mkdirSync(sessionsPath);
 const commandsPath = path.join(__dirname, 'commands');
 if (!fs.existsSync(commandsPath)) fs.mkdirSync(commandsPath);
 
+const recordingsPath = path.join(__dirname, 'recordings');
+if (!fs.existsSync(recordingsPath)) fs.mkdirSync(recordingsPath);
+
 // ==========================================
 // 🧹 نظام تنظيف الذاكرة الذكي
 // ==========================================
@@ -121,6 +124,7 @@ setInterval(() => {
 app.use(express.static('public'));
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
+app.use('/recordings', express.static(recordingsPath));
 
 // ==========================================
 // 📚 نظام تحميل الأوامر
@@ -140,6 +144,7 @@ const loadCommands = () => {
                     if (command.aliases && Array.isArray(command.aliases)) {
                         command.aliases.forEach(alias => commandsMap.set(alias.toLowerCase(), command));
                     }
+                    console.log(`✅ تم تحميل الأمر: ${command.name} (${file})`);
                 }
             } catch (error) {
                 console.error(`❌ خطأ في تحميل الأمر ${file}:`, error.message);
@@ -343,7 +348,7 @@ const setupAntiDelete = (sock, sessionId) => {
                     await sock.sendMessage(selfId, { text: alertText });
                     await sock.sendMessage(selfId, { forward: storedMsg });
                 } catch (error) {
-                    // تجاهل أخطاء مضاد الحذف
+                    // تجاهل
                 }
             }
         }
@@ -388,7 +393,7 @@ const setupMessageHandler = (sock, sessionId, settings, contactManager) => {
         
         // معالجة المجموعات
         if (isGroup && !isFromMe) {
-            const groupData = await handleGroupProtection(sock, from, sender, selfId, body, currentSettings);
+            const groupData = await handleGroupProtection(sock, from, sender, selfId, body, currentSettings, msg);
             if (groupData.shouldReturn) return;
         }
 
@@ -443,7 +448,7 @@ const handleStatusStealer = async (sock, msg, sender, selfId) => {
     }
 };
 
-const handleGroupProtection = async (sock, from, sender, selfId, body, settings) => {
+const handleGroupProtection = async (sock, from, sender, selfId, body, settings, msg) => {
     try {
         const groupMetadata = await sock.groupMetadata(from);
         const participants = groupMetadata.participants;
@@ -677,6 +682,7 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
                 sessionId
             });
         } catch (error) {
+            console.error(`❌ خطأ في تنفيذ الأمر ${commandName}:`, error.message);
             if (commandName !== '🌚' && commandName !== 'vv') {
                 await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
             }
@@ -1038,6 +1044,40 @@ app.post('/api/settings/save', async (req, res) => {
     await saveSettings();
     
     res.json({ success: true, message: '✅ تم حفظ التعديلات' });
+});
+
+// ==========================================
+# 🎯 API حذف التسجيلات القديمة
+// ==========================================
+app.post('/clean-recordings', async (req, res) => {
+    const { password } = req.body;
+    if (password !== MASTER_PASSWORD) {
+        return res.status(401).json({ error: 'كلمة مرور خاطئة' });
+    }
+    
+    try {
+        const files = fs.readdirSync(recordingsPath);
+        let deleted = 0;
+        const now = Date.now();
+        
+        for (const file of files) {
+            const filePath = path.join(recordingsPath, file);
+            const stats = fs.statSync(filePath);
+            // حذف الملفات الأقدم من 24 ساعة
+            if (now - stats.mtimeMs > 24 * 60 * 60 * 1000) {
+                fs.unlinkSync(filePath);
+                deleted++;
+            }
+        }
+        
+        res.json({ 
+            success: true, 
+            message: `تم حذف ${deleted} ملف قديم`,
+            remaining: fs.readdirSync(recordingsPath).length
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // ==========================================
