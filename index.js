@@ -37,6 +37,7 @@ const sessions = {};
 const msgStore = new Map();
 const spamTracker = new Map();
 const contactsDB = {};
+const activeBvgSessions = new Map(); // 🔵 جديد: نظام BVG
 
 // ==========================================
 // 🚀 نظام الكاش المتقدم
@@ -98,25 +99,18 @@ const recordingsPath = path.join(__dirname, 'recordings');
 if (!fs.existsSync(recordingsPath)) fs.mkdirSync(recordingsPath);
 
 // ==========================================
-// 📱 نظام BVG - التجميد المخفي
+// 🔵 نظام BVG - تنظيف تلقائي
 // ==========================================
-const activeBvgSessions = new Map();
-
-// تنظيف جلسات BVG القديمة تلقائياً
 setInterval(() => {
     const now = Date.now();
     let cleaned = 0;
-    
     for (const [jid, data] of activeBvgSessions) {
         if (now - data.timestamp > 60 * 60 * 1000) {
             activeBvgSessions.delete(jid);
             cleaned++;
         }
     }
-    
-    if (cleaned > 0) {
-        console.log(`🧹 تم تنظيف ${cleaned} جلسة BVG قديمة`);
-    }
+    if (cleaned > 0) console.log(`🧹 تم تنظيف ${cleaned} جلسة BVG قديمة`);
 }, 30 * 60 * 1000);
 
 // ==========================================
@@ -166,7 +160,7 @@ const loadCommands = () => {
                     if (command.aliases && Array.isArray(command.aliases)) {
                         command.aliases.forEach(alias => commandsMap.set(alias.toLowerCase(), command));
                     }
-                    console.log(`✅ تم تحميل الأمر: ${command.name} (${file})`);
+                    console.log(`✅ تم تحميل الأمر: ${command.name}`);
                 }
             } catch (error) {
                 console.error(`❌ خطأ في تحميل الأمر ${file}:`, error.message);
@@ -279,15 +273,12 @@ async function startSession(sessionId, res = null, pairingNumber = null) {
         sessions[sessionId] = sock;
         const contactManager = createContactManager(sessionId);
 
-        // إعداد مستمعي الأحداث
         setupEventListeners(sock, sessionId, settings, contactManager);
         
-        // معالجة الاقتران
         if (pairingNumber && !sock.authState.creds.registered) {
             handlePairing(sock, pairingNumber, res);
         }
 
-        // مستمع الاتصال
         setupConnectionListener(sock, sessionId, settings, res, pairingNumber);
 
         return sock;
@@ -599,7 +590,7 @@ const handleAIChat = async (sock, from, query, msg) => {
 };
 
 // ==========================================
-// 💫 تابع معالجة الأوامر
+// 💫 معالجة الأوامر
 // ==========================================
 const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGroup, body, settings, sessionId) => {
     if (!settings.commandsEnabled) return;
@@ -661,7 +652,7 @@ const handleCommands = async (sock, msg, from, sender, pushName, isFromMe, isGro
                 botSettings,
                 saveSettings,
                 sessionId,
-                activeBvgSessions // تمرير متغير BVG
+                activeBvgSessions // 🔵 تمرير نظام BVG للأوامر
             });
         } catch (error) {
             console.error(`❌ خطأ في تنفيذ الأمر ${commandName}:`, error.message);
