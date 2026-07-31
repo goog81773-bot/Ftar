@@ -122,6 +122,6 @@ function generateAdvancedReport(mediaMsg, sender, pushName, fileName) {
 ║
 ╠══════════════════════════════╣
 ║ 💎 _نظام التنصت المتقدم_
-║ _™ Tarzan VIP Security_
+║ ™ Tarzan VIP Security
 ╚══════════════════════════════╝`;
 }
